@@ -25,18 +25,6 @@ User.init({
   },
   
   // Basic Information
-  store_name: {
-    type: DataTypes.STRING(100),
-    allowNull: false,
-    validate: {
-      notEmpty: { msg: 'Store name is required' },
-      len: {
-        args: [2, 100],
-        msg: 'Store name must be between 2 and 100 characters'
-      }
-    }
-  },
-  
   owner_name: {
     type: DataTypes.STRING(50),
     allowNull: false,
@@ -75,33 +63,6 @@ User.init({
     },
     validate: {
       isEmail: { msg: 'Please enter a valid email address' }
-    }
-  },
-  
-  // Address
-  street_address: {
-    type: DataTypes.STRING(200),
-    allowNull: true
-  },
-  
-  city: {
-    type: DataTypes.STRING(50),
-    allowNull: true
-  },
-  
-  state: {
-    type: DataTypes.STRING(50),
-    allowNull: true
-  },
-  
-  pincode: {
-    type: DataTypes.STRING(6),
-    allowNull: true,
-    validate: {
-      is: {
-        args: /^\d{6}$/,
-        msg: 'Please enter a valid 6-digit pincode'
-      }
     }
   },
   

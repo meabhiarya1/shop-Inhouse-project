@@ -5,15 +5,10 @@ const User = require('../models/User');
 
 const users = [
   {
-    store_name: "Hardware Hub",
     owner_name: "Abhijeet Kumar",
     mobile_number: "7004106646",
     email: "abhijeet@hardwarehub.com",
     password: "password123",
-    street_address: "123 Main Street, Gandhi Chowk",
-    city: "Hajipur",
-    state: "Bihar",
-    pincode: "844101",
     is_verified: true,
     is_active: true
   }

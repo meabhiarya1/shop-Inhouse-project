@@ -9,10 +9,6 @@ module.exports = {
         primaryKey: true,
         autoIncrement: true
       },
-      store_name: {
-        type: Sequelize.STRING(100),
-        allowNull: false
-      },
       owner_name: {
         type: Sequelize.STRING(50),
         allowNull: false
@@ -37,25 +33,7 @@ module.exports = {
         type: Sequelize.STRING(255),
         allowNull: false
       },
-      street_address: {
-        type: Sequelize.STRING(200),
-        allowNull: true
-      },
-      city: {
-        type: Sequelize.STRING(50),
-        allowNull: true
-      },
-      state: {
-        type: Sequelize.STRING(50),
-        allowNull: true
-      },
-      pincode: {
-        type: Sequelize.STRING(6),
-        allowNull: true,
-        validate: {
-          is: /^\d{6}$/
-        }
-      },
+
       is_verified: {
         type: Sequelize.BOOLEAN,
         defaultValue: false
