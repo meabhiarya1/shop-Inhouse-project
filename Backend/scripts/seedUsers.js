@@ -45,12 +45,8 @@ async function seedUsers() {
         mobile: userData.mobile_number
       });
 
-      const salt = await bcrypt.genSalt(12);
-      const hashedPassword = await bcrypt.hash(userData.password, salt);
-      
       const user = await User.create({
         ...userData,
-        password: hashedPassword,
         last_login: new Date()
       });
 

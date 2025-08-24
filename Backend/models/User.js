@@ -5,7 +5,12 @@ const { sequelize } = require('../config/database');
 class User extends Model {
   // Instance method to compare password
   async comparePassword(candidatePassword) {
-    return await bcrypt.compare(candidatePassword, this.password);
+    try {
+      return await bcrypt.compare(candidatePassword, this.password);
+    } catch (error) {
+      console.error('Password comparison error:', error);
+      return false;
+    }
   }
 
   // Override toJSON to exclude sensitive data
