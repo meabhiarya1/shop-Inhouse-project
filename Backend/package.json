@@ -12,7 +12,9 @@
     "migrate:undo": "npx sequelize-cli db:migrate:undo",
     "migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",
     "seed:all": "node scripts/seedUsers.js && node scripts/seedShops.js",
-    "db:reset": "node scripts/resetDatabase.js"
+    "db:reset": "node scripts/resetDatabase.js",
+    "backup": "node scripts/backupData.js",
+    "restore": "node scripts/restoreData.js"
   },
   "dependencies": {
     "express": "^4.18.2",
