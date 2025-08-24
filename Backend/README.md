@@ -1,6 +1,6 @@
 # Shop Management Backend
 
-This is the backend service for the Shop Management System. It provides APIs to manage shops and authentication.
+This is the backend service for the Shop Management System, providing APIs for shop listing and user authentication.
 
 ## Prerequisites
 
@@ -74,30 +74,35 @@ This is the backend service for the Shop Management System. It provides APIs to 
 ## Database Schema
 
 ### Users Table
-- `id` - Primary Key
-- `store_name` - Store name (varchar)
-- `owner_name` - Owner name (varchar)
-- `mobile_number` - Mobile number (varchar)
-- `email` - Email address (varchar)
-- `password` - Hashed password (varchar)
-- Other fields...
+```sql
+CREATE TABLE users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  owner_name VARCHAR(50) NOT NULL,
+  mobile_number VARCHAR(10) NOT NULL UNIQUE,
+  email VARCHAR(100) UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  is_verified BOOLEAN DEFAULT false,
+  is_active BOOLEAN DEFAULT true,
+  last_login DATETIME,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
 
 ### Shops Table
-- `id` - Primary Key
-- `shop_name` - Shop name (varchar)
-- `shop_type` - Type of shop (enum: retail, wholesale, both)
-- `phone_number` - Contact number (varchar)
-- `street_address` - Street address (varchar)
-- `city` - City (varchar)
-- `state` - State (varchar)
-- `pincode` - PIN code (varchar)
-- `is_active` - Shop status (boolean)
-
-## Sample User for Testing
-```
-Mobile: 7004106646
-Password: password123
-```
+```sql
+CREATE TABLE shops (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  shop_name VARCHAR(100) NOT NULL,
+  shop_type ENUM('retail', 'wholesale', 'both') NOT NULL DEFAULT 'both',
+  phone_number VARCHAR(10) NOT NULL UNIQUE,
+  street_address VARCHAR(200) NOT NULL,
+  city VARCHAR(50) NOT NULL,
+  state VARCHAR(50) NOT NULL,
+  pincode VARCHAR(6) NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
 
 ## Error Handling
 The API uses standard HTTP response codes:
