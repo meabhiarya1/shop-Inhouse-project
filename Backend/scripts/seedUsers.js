@@ -26,24 +26,32 @@ async function seedUsers() {
     await sequelize.authenticate();
     console.log('Database connected.');
 
-    // First, let's check if users already exist
+    // Check for existing users without deleting them
+    console.log('Checking for existing users...');
     const existingUsers = await User.findAll();
-    if (existingUsers.length > 0) {
-      console.log('Existing users found:', existingUsers.length);
-      console.log('Deleting existing users...');
-      await User.destroy({ where: {} });
+    console.log(`Found ${existingUsers.length} existing users`);
+
+    // Filter out users that already exist (based on mobile number)
+    const existingMobileNumbers = existingUsers.map(user => user.mobile_number);
+    const usersToCreate = users.filter(user => !existingMobileNumbers.includes(user.mobile_number));
+
+    if (usersToCreate.length === 0) {
+      console.log('All users already exist in the database. No new users to create.');
+      process.exit(0);
+      return;
     }
 
-    // Hash passwords and create users
-    for (const userData of users) {
-      console.log('\nSeeding user with:', {
-        mobile: userData.mobile_number,
-        rawPassword: userData.password
+    console.log(`Creating ${usersToCreate.length} new users...`);
+
+    // Hash passwords and create only new users
+    for (const userData of usersToCreate) {
+      console.log('\nCreating new user:', {
+        store: userData.store_name,
+        mobile: userData.mobile_number
       });
 
       const salt = await bcrypt.genSalt(12);
       const hashedPassword = await bcrypt.hash(userData.password, salt);
-      console.log('Generated hash:', hashedPassword);
       
       const user = await User.create({
         ...userData,
@@ -51,22 +59,15 @@ async function seedUsers() {
         last_login: new Date()
       });
 
-      console.log('Created user:', {
+      console.log('✅ Successfully created user:', {
         id: user.id,
-        mobile: user.mobile_number,
-        store_name: user.store_name,
+        store: user.store_name,
+        mobile: user.mobile_number
       });
 
-      // Verify the password works immediately after creation
-      const fetchedUser = await User.findByPk(user.id);
-      console.log('Stored password hash:', fetchedUser.password);
-      
-      // Test with both bcrypt directly and the model method
-      const directCheck = await bcrypt.compare(userData.password, fetchedUser.password);
-      console.log('Direct bcrypt check:', directCheck);
-      
-      const modelCheck = await fetchedUser.comparePassword(userData.password);
-      console.log('Model method check:', modelCheck);
+      // Verify the password works
+      const passwordCheck = await user.comparePassword(userData.password);
+      console.log('Password verification:', passwordCheck ? 'PASSED' : 'FAILED');
     }
 
     console.log('✅ Users seeded successfully');
