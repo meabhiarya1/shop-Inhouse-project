@@ -61,15 +61,105 @@ This is the backend service for the Shop Management System, providing APIs for s
    ```
    The server will automatically try ports 5000, 3000, 8000, and 8080 if previous ports are busy.
 
-## API Endpoints
+## API Documentation
 
-### Authentication
-- `POST /api/auth/login` - User login
-- `POST /api/auth/register` - User registration
+### Public Routes (No Authentication Required)
 
-### Shops
-- `GET /api/shops` - Get all shops
-- `GET /api/shops/:id` - Get shop by ID
+#### Authentication
+- **POST** `/api/auth/login` - User login
+  ```json
+  // Request Body
+  {
+    "mobileNumber": "7004106646",
+    "password": "password123"
+  }
+  
+  // Success Response
+  {
+    "success": true,
+    "message": "Login successful",
+    "data": {
+      "token": "jwt_token_here",
+      "user": {
+        "id": 1,
+        "ownerName": "Abhijeet Kumar",
+        "mobileNumber": "7004106646",
+        "email": "abhijeet@hardwarehub.com",
+        "lastLogin": "2025-08-24T..."
+      }
+    }
+  }
+  ```
+
+### Private Routes (Authentication Required)
+*All private routes require Authorization header: `Bearer <jwt_token>`*
+
+#### User Profile
+- **GET** `/api/auth/profile` - Get user profile
+
+#### Shops
+- **GET** `/api/shops` - Get all shops
+
+#### Categories
+- **GET** `/api/categories` - Get all categories
+- **GET** `/api/categories/:categoryId/products` - Get all products by category ID
+- **POST** `/api/categories` - Create new category
+  ```json
+  // Request Body
+  {
+    "category_name": "Wood"
+  }
+  ```
+- **PUT** `/api/categories/:id` - Update category
+  ```json
+  // Request Body
+  {
+    "category_name": "Updated Category Name"
+  }
+  ```
+- **DELETE** `/api/categories/:id` - Delete category (only if not associated with products)
+
+#### Products
+- **GET** `/api/products` - Get all products with brand, shop, and category details
+- **GET** `/api/products/:id` - Get product by ID
+- **GET** `/api/products/shop/:shopId` - Get all products by shop ID
+- **POST** `/api/products` - Create new product
+  ```json
+  // Request Body
+  {
+    "product_name": "Wooden Chair",
+    "length": 60.5,
+    "width": 45.0,
+    "thickness": 5.0,  // Optional, can be null
+    "quantity": 25,
+    "weight": 12.5,    // Optional, can be null
+    "brand_id": 1,
+    "shop_id": 1,
+    "category_id": 1
+  }
+  ```
+- **PUT** `/api/products/:id` - Update product
+  ```json
+  // Request Body (same as create)
+  {
+    "product_name": "Updated Product Name",
+    "length": 65.0,
+    "width": 50.0,
+    "thickness": null,
+    "quantity": 30,
+    "weight": 15.0,
+    "brand_id": 2,
+    "shop_id": 1,
+    "category_id": 2
+  }
+  ```
+- **DELETE** `/api/products/delete/multiple` - Delete multiple products
+  ```json
+  // Request Body
+  {
+    "productIds": [1, 2, 3, 4]
+  }
+  ```
 
 ## Database Schema
 
@@ -87,6 +177,7 @@ CREATE TABLE users (
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
+```
 
 ### Shops Table
 ```sql
@@ -103,8 +194,48 @@ CREATE TABLE shops (
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
+```
 
-## Error Handling
+### Categories Table
+```sql
+CREATE TABLE categories (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  category_name VARCHAR(100) NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+```
+
+### Brands Table
+```sql
+CREATE TABLE brands (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  brand_name VARCHAR(100) NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+```
+
+### Products Table
+```sql
+CREATE TABLE products (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_name VARCHAR(200) NOT NULL,
+  length DECIMAL(10,2) NOT NULL,
+  width DECIMAL(10,2) NOT NULL,
+  thickness DECIMAL(10,2) NULL,
+  quantity INT NOT NULL,
+  weight DECIMAL(10,2) NULL,
+  brand_id INT NOT NULL,
+  shop_id INT NOT NULL,
+  category_id INT NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  FOREIGN KEY (brand_id) REFERENCES brands(id),
+  FOREIGN KEY (shop_id) REFERENCES shops(id),
+  FOREIGN KEY (category_id) REFERENCES categories(id)
+);
+```
 The API uses standard HTTP response codes:
 - 200: Success
 - 400: Bad Request
@@ -145,8 +276,29 @@ To make changes:
    - Check token expiration time
    - Ensure user credentials are correct
 
-## Scripts
+## Available Scripts
 
-- `npm start` - Start the server
+### Development
+- `npm start` - Start the server in production mode
+- `npm run dev` - Start the server in development mode with nodemon
+- `npm test` - Run tests with Jest
+
+### Database Management
+- `npm run setup-db` - Set up database and create tables
+- `npm run migrate` - Run pending database migrations
+- `npm run migrate:undo` - Undo last migration
+- `npm run migrate:undo:all` - Undo all migrations
+- `npm run db:reset` - Reset entire database (caution: deletes all data)
+
+### Data Management
+- `npm run seed:all` - Seed database with initial users and shops
+- `npm run backup` - Create backup of database
+- `npm run restore` - Restore database from backup
+
+### Individual Scripts
+- `node scripts/setupDatabase.js` - Database setup
 - `node scripts/seedUsers.js` - Initialize users
 - `node scripts/seedShops.js` - Initialize shops
+- `node scripts/backupData.js` - Create data backup
+- `node scripts/restoreData.js` - Restore from backup
+- `node scripts/resetDatabase.js` - Reset database
