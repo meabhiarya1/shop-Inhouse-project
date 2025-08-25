@@ -4,6 +4,7 @@ const cors = require('cors');
 const { connectDB } = require('./config/database');
 const authRoutes = require('./routes/authRoutes');
 const shopRoutes = require('./routes/shopRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
 
 // Initialize Express app
 const app = express();
@@ -40,6 +41,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/shops', shopRoutes);
+app.use('/api/categories', categoryRoutes);
 
 // Handle 404 routes
 app.use('*', (req, res) => {
