@@ -161,6 +161,114 @@ This is the backend service for the Shop Management System, providing APIs for s
   }
   ```
 
+#### Sales Management
+- **GET** `/api/sales` - Get all sales with filtering and pagination
+  ```bash
+  # Query Parameters:
+  # page=1, limit=50, shop_id, product_id, payment_method
+  # start_date=2024-08-26, end_date=2024-08-26
+  
+  # Examples:
+  GET /api/sales?start_date=2024-08-26&end_date=2024-08-26
+  GET /api/sales?shop_id=1&payment_method=cash&page=1&limit=20
+  ```
+
+- **GET** `/api/sales/:id` - Get sale details by ID
+
+- **POST** `/api/sales` - Record new sale (automatically reduces product quantity)
+  ```json
+  // Request Body
+  {
+    "product_id": 1,
+    "shop_id": 1,
+    "quantity_sold": 3,
+    "unit_price": 500.00,        // Optional
+    "total_amount": 1500.00,     // Required
+    "customer_name": "John Doe", // Optional
+    "customer_phone": "9876543210", // Optional
+    "payment_method": "cash",    // Optional: cash/card/upi/bank_transfer/credit
+    "sale_date": "2024-08-26"    // Optional, defaults to current time
+  }
+  ```
+
+- **PUT** `/api/sales/:id` - Update sale (adjusts product quantity accordingly)
+  ```json
+  // Request Body (all fields optional)
+  {
+    "quantity_sold": 5,
+    "total_amount": 2500.00,
+    "customer_name": "Jane Doe",
+    "payment_method": "card"
+  }
+  ```
+
+- **DELETE** `/api/sales/:id` - Cancel sale and restore product quantity
+
+#### Dashboard Analytics
+- **GET** `/api/dashboard/analytics` - Main dashboard with product analytics
+  ```bash
+  # Query Parameters:
+  # period=today/yesterday/custom/lifetime
+  # custom_date=2024-08-26 (required when period=custom)
+  # shop_id, category_id, brand_id (optional filters)
+  
+  # Examples:
+  GET /api/dashboard/analytics?period=today
+  GET /api/dashboard/analytics?period=yesterday
+  GET /api/dashboard/analytics?period=custom&custom_date=2024-08-25
+  GET /api/dashboard/analytics?period=lifetime&shop_id=1
+  ```
+  
+  ```json
+  // Response includes:
+  {
+    "success": true,
+    "data": {
+      "summary": {
+        "total_products": 25,
+        "total_quantity_sold": 47,
+        "total_revenue": 15670.50,
+        "products_with_sales": 8,
+        "products_without_sales": 17
+      },
+      "products": [
+        {
+          "id": 1,
+          "product_name": "Steel Rod",
+          "current_quantity": 95,      // Current stock
+          "quantity_sold": 5,          // Sold in selected period
+          "total_revenue": 2500.00,    // Revenue in selected period
+          "brand": {...},
+          "shop": {...},
+          "category": {...}
+        }
+      ]
+    }
+  }
+  ```
+
+- **GET** `/api/dashboard/top-products` - Top selling products by volume
+  ```bash
+  # Query Parameters:
+  # period=today/yesterday/custom/lifetime
+  # custom_date=2024-08-26, limit=10, shop_id
+  
+  # Examples:
+  GET /api/dashboard/top-products?period=today&limit=5
+  GET /api/dashboard/top-products?period=lifetime&limit=10
+  ```
+
+- **GET** `/api/dashboard/shop-summary` - Sales performance by shop
+  ```bash
+  # Query Parameters:
+  # period=today/yesterday/custom/lifetime
+  # custom_date=2024-08-26
+  
+  # Examples:
+  GET /api/dashboard/shop-summary?period=today
+  GET /api/dashboard/shop-summary?period=custom&custom_date=2024-08-20
+  ```
+
 ## Database Schema
 
 ### Users Table
@@ -234,6 +342,27 @@ CREATE TABLE products (
   FOREIGN KEY (brand_id) REFERENCES brands(id),
   FOREIGN KEY (shop_id) REFERENCES shops(id),
   FOREIGN KEY (category_id) REFERENCES categories(id)
+);
+```
+
+### Sales Table
+```sql
+CREATE TABLE sales (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_id INT NOT NULL,
+  shop_id INT NOT NULL,
+  quantity_sold INT NOT NULL,
+  unit_price DECIMAL(10,2),
+  total_amount DECIMAL(10,2) NOT NULL,
+  customer_name VARCHAR(100),
+  customer_phone VARCHAR(20),
+  payment_method ENUM('cash', 'card', 'upi', 'bank_transfer', 'credit') DEFAULT 'cash',
+  sale_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  notes TEXT,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  FOREIGN KEY (shop_id) REFERENCES shops(id) ON DELETE CASCADE
 );
 ```
 The API uses standard HTTP response codes:
