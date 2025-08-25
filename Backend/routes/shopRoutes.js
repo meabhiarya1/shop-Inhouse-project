@@ -10,6 +10,6 @@ router.use(authMiddleware);
 
 // Routes
 router.get('/', ShopController.getAllShops);
-router.get('/:id', ShopController.getShopById);
+// router.get('/:id', ShopController.getShopById);
 
 module.exports = router;

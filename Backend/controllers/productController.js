@@ -1,4 +1,5 @@
 const { validationResult } = require('express-validator');
+const { sequelize } = require('../config/database');
 const Product = require('../models/Product');
 const Brand = require('../models/Brand');
 const Shop = require('../models/Shop');
@@ -144,9 +145,12 @@ class ProductController {
 
   // Create new product
   static async createProduct(req, res) {
+    const transaction = await sequelize.transaction();
+    
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Validation errors',
@@ -168,12 +172,13 @@ class ProductController {
 
       // Verify foreign key references exist
       const [brand, shop, category] = await Promise.all([
-        Brand.findByPk(brand_id),
-        Shop.findByPk(shop_id),
-        Category.findByPk(category_id)
+        Brand.findByPk(brand_id, { transaction }),
+        Shop.findByPk(shop_id, { transaction }),
+        Category.findByPk(category_id, { transaction })
       ]);
 
       if (!brand) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Brand not found'
@@ -181,6 +186,7 @@ class ProductController {
       }
 
       if (!shop) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Shop not found'
@@ -188,6 +194,7 @@ class ProductController {
       }
 
       if (!category) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Category not found'
@@ -204,7 +211,7 @@ class ProductController {
         brand_id,
         shop_id,
         category_id
-      });
+      }, { transaction });
 
       // Fetch the created product with associations
       const createdProduct = await Product.findByPk(product.id, {
@@ -224,8 +231,11 @@ class ProductController {
             as: 'category',
             attributes: ['id', 'category_name']
           }
-        ]
+        ],
+        transaction
       });
+
+      await transaction.commit();
 
       res.status(201).json({
         success: true,
@@ -233,6 +243,7 @@ class ProductController {
         data: createdProduct
       });
     } catch (error) {
+      await transaction.rollback();
       console.error('Error creating product:', error);
       res.status(500).json({
         success: false,
@@ -243,9 +254,12 @@ class ProductController {
 
   // Update product
   static async updateProduct(req, res) {
+    const transaction = await sequelize.transaction();
+    
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Validation errors',
@@ -266,8 +280,9 @@ class ProductController {
         category_id
       } = req.body;
 
-      const product = await Product.findByPk(id);
+      const product = await Product.findByPk(id, { transaction });
       if (!product) {
+        await transaction.rollback();
         return res.status(404).json({
           success: false,
           message: 'Product not found'
@@ -276,12 +291,13 @@ class ProductController {
 
       // Verify foreign key references exist
       const [brand, shop, category] = await Promise.all([
-        Brand.findByPk(brand_id),
-        Shop.findByPk(shop_id),
-        Category.findByPk(category_id)
+        Brand.findByPk(brand_id, { transaction }),
+        Shop.findByPk(shop_id, { transaction }),
+        Category.findByPk(category_id, { transaction })
       ]);
 
       if (!brand) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Brand not found'
@@ -289,6 +305,7 @@ class ProductController {
       }
 
       if (!shop) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Shop not found'
@@ -296,6 +313,7 @@ class ProductController {
       }
 
       if (!category) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Category not found'
@@ -312,7 +330,7 @@ class ProductController {
         brand_id,
         shop_id,
         category_id
-      });
+      }, { transaction });
 
       // Fetch the updated product with associations
       const updatedProduct = await Product.findByPk(id, {
@@ -332,8 +350,11 @@ class ProductController {
             as: 'category',
             attributes: ['id', 'category_name']
           }
-        ]
+        ],
+        transaction
       });
+
+      await transaction.commit();
 
       res.status(200).json({
         success: true,
@@ -341,6 +362,7 @@ class ProductController {
         data: updatedProduct
       });
     } catch (error) {
+      await transaction.rollback();
       console.error('Error updating product:', error);
       res.status(500).json({
         success: false,
@@ -351,10 +373,13 @@ class ProductController {
 
   // Multiple delete products
   static async deleteMultipleProducts(req, res) {
+    const transaction = await sequelize.transaction();
+    
     try {
       const { productIds } = req.body;
 
       if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Product IDs array is required and cannot be empty'
@@ -367,10 +392,12 @@ class ProductController {
           id: {
             [Op.in]: productIds
           }
-        }
+        },
+        transaction
       });
 
       if (products.length !== productIds.length) {
+        await transaction.rollback();
         const foundIds = products.map(p => p.id);
         const notFoundIds = productIds.filter(id => !foundIds.includes(parseInt(id)));
         
@@ -386,8 +413,11 @@ class ProductController {
           id: {
             [Op.in]: productIds
           }
-        }
+        },
+        transaction
       });
+
+      await transaction.commit();
 
       res.status(200).json({
         success: true,
@@ -395,6 +425,7 @@ class ProductController {
         deletedCount: deletedCount
       });
     } catch (error) {
+      await transaction.rollback();
       console.error('Error deleting products:', error);
       res.status(500).json({
         success: false,

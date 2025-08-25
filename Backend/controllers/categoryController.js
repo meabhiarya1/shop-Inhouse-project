@@ -1,4 +1,5 @@
 const { validationResult } = require('express-validator');
+const { sequelize } = require('../config/database');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
 
@@ -79,9 +80,12 @@ class CategoryController {
 
   // Create new category
   static async createCategory(req, res) {
+    const transaction = await sequelize.transaction();
+    
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Validation errors',
@@ -93,10 +97,12 @@ class CategoryController {
 
       // Check if category already exists
       const existingCategory = await Category.findOne({
-        where: { category_name: category_name.trim() }
+        where: { category_name: category_name.trim() },
+        transaction
       });
 
       if (existingCategory) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Category with this name already exists'
@@ -105,7 +111,9 @@ class CategoryController {
 
       const category = await Category.create({
         category_name: category_name.trim()
-      });
+      }, { transaction });
+
+      await transaction.commit();
 
       res.status(201).json({
         success: true,
@@ -113,6 +121,7 @@ class CategoryController {
         data: category
       });
     } catch (error) {
+      await transaction.rollback();
       console.error('Error creating category:', error);
       res.status(500).json({
         success: false,
@@ -123,9 +132,12 @@ class CategoryController {
 
   // Update category
   static async updateCategory(req, res) {
+    const transaction = await sequelize.transaction();
+    
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Validation errors',
@@ -136,8 +148,9 @@ class CategoryController {
       const { id } = req.params;
       const { category_name } = req.body;
 
-      const category = await Category.findByPk(id);
+      const category = await Category.findByPk(id, { transaction });
       if (!category) {
+        await transaction.rollback();
         return res.status(404).json({
           success: false,
           message: 'Category not found'
@@ -149,10 +162,12 @@ class CategoryController {
         where: { 
           category_name: category_name.trim(),
           id: { [require('sequelize').Op.ne]: id }
-        }
+        },
+        transaction
       });
 
       if (existingCategory) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Another category with this name already exists'
@@ -161,7 +176,9 @@ class CategoryController {
 
       await category.update({
         category_name: category_name.trim()
-      });
+      }, { transaction });
+
+      await transaction.commit();
 
       res.status(200).json({
         success: true,
@@ -169,6 +186,7 @@ class CategoryController {
         data: category
       });
     } catch (error) {
+      await transaction.rollback();
       console.error('Error updating category:', error);
       res.status(500).json({
         success: false,
@@ -179,11 +197,14 @@ class CategoryController {
 
   // Delete category (only if not associated with any product)
   static async deleteCategory(req, res) {
+    const transaction = await sequelize.transaction();
+    
     try {
       const { id } = req.params;
 
-      const category = await Category.findByPk(id);
+      const category = await Category.findByPk(id, { transaction });
       if (!category) {
+        await transaction.rollback();
         return res.status(404).json({
           success: false,
           message: 'Category not found'
@@ -192,23 +213,28 @@ class CategoryController {
 
       // Check if category is associated with any products
       const productCount = await Product.count({
-        where: { category_id: id }
+        where: { category_id: id },
+        transaction
       });
 
       if (productCount > 0) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: `Cannot delete category. It is associated with ${productCount} product(s). Please remove the products first.`
         });
       }
 
-      await category.destroy();
+      await category.destroy({ transaction });
+
+      await transaction.commit();
 
       res.status(200).json({
         success: true,
         message: 'Category deleted successfully'
       });
     } catch (error) {
+      await transaction.rollback();
       console.error('Error deleting category:', error);
       res.status(500).json({
         success: false,
