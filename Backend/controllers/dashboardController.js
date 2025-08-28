@@ -14,51 +14,57 @@ class DashboardController {
     try {
       const { 
         period = 'today',
-        custom_date,
+        start_date,
+        end_date,
         shop_id,
         category_id,
         brand_id 
       } = req.query;
 
-      // Calculate date range based on period
+      // Calculate date range based on parameters
       let startDate, endDate;
       const now = new Date();
       
-      switch (period) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-          break;
-          
-        case 'yesterday':
-          const yesterday = new Date(now);
-          yesterday.setDate(yesterday.getDate() - 1);
-          startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-          endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
-          break;
-          
-        case 'custom':
-          if (!custom_date) {
-            return res.status(400).json({
-              success: false,
-              message: 'Custom date is required when period is "custom"'
-            });
-          }
-          const customDate = new Date(custom_date);
-          startDate = new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate());
-          endDate = new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate(), 23, 59, 59);
-          break;
-          
-        case 'lifetime':
-          startDate = new Date('1970-01-01');
-          endDate = new Date();
-          break;
-          
-        default:
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid period. Use: today, yesterday, custom, or lifetime'
-          });
+      // If start_date and end_date are provided, use them directly
+      if (start_date && end_date) {
+        startDate = new Date(start_date);
+        endDate = new Date(end_date);
+        // Set end date to end of day
+        endDate.setHours(23, 59, 59, 999);
+      } else if (start_date) {
+        // If only start_date provided, use it as single day
+        startDate = new Date(start_date);
+        endDate = new Date(start_date);
+        endDate.setHours(23, 59, 59, 999);
+      } else if (end_date) {
+        // If only end_date provided, use it as single day
+        startDate = new Date(end_date);
+        endDate = new Date(end_date);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        // Fall back to period-based logic
+        switch (period) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+            break;
+            
+          case 'yesterday':
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+            endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+            break;
+            
+          case 'lifetime':
+            startDate = new Date('1970-01-01');
+            endDate = new Date();
+            break;
+            
+          default:
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        }
       }
 
       // Build where clause for products
@@ -142,13 +148,14 @@ class DashboardController {
 
       res.status(200).json({
         success: true,
-        message: `Dashboard data for ${period}${period === 'custom' ? ` (${custom_date})` : ''}`,
+        message: `Dashboard data${start_date || end_date ? ' for date range' : ` for ${period}`}`,
         data: {
-          period: period,
+          period: start_date || end_date ? 'custom_range' : period,
           date_range: {
             start: startDate,
             end: endDate,
-            custom_date: period === 'custom' ? custom_date : null
+            start_date: start_date || null,
+            end_date: end_date || null
           },
           summary: summary,
           products: dashboardData
@@ -169,7 +176,8 @@ class DashboardController {
     try {
       const { 
         period = 'today',
-        custom_date,
+        start_date,
+        end_date,
         limit = 10,
         shop_id 
       } = req.query;
@@ -178,32 +186,40 @@ class DashboardController {
       let startDate, endDate;
       const now = new Date();
       
-      switch (period) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-          break;
-        case 'yesterday':
-          const yesterday = new Date(now);
-          yesterday.setDate(yesterday.getDate() - 1);
-          startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-          endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
-          break;
-        case 'custom':
-          if (!custom_date) {
-            return res.status(400).json({
-              success: false,
-              message: 'Custom date is required when period is "custom"'
-            });
-          }
-          const customDate = new Date(custom_date);
-          startDate = new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate());
-          endDate = new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate(), 23, 59, 59);
-          break;
-        case 'lifetime':
-          startDate = new Date('1970-01-01');
-          endDate = new Date();
-          break;
+      // If start_date and end_date are provided, use them directly
+      if (start_date && end_date) {
+        startDate = new Date(start_date);
+        endDate = new Date(end_date);
+        endDate.setHours(23, 59, 59, 999);
+      } else if (start_date) {
+        startDate = new Date(start_date);
+        endDate = new Date(start_date);
+        endDate.setHours(23, 59, 59, 999);
+      } else if (end_date) {
+        startDate = new Date(end_date);
+        endDate = new Date(end_date);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        // Fall back to period-based logic
+        switch (period) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+            break;
+          case 'yesterday':
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+            endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+            break;
+          case 'lifetime':
+            startDate = new Date('1970-01-01');
+            endDate = new Date();
+            break;
+          default:
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        }
       }
 
       // Build where clause for sales
@@ -252,10 +268,15 @@ class DashboardController {
 
       res.status(200).json({
         success: true,
-        message: `Top ${limit} selling products for ${period}`,
+        message: `Top ${limit} selling products${start_date || end_date ? ' for date range' : ` for ${period}`}`,
         data: {
-          period: period,
-          date_range: { start: startDate, end: endDate },
+          period: start_date || end_date ? 'custom_range' : period,
+          date_range: { 
+            start: startDate, 
+            end: endDate,
+            start_date: start_date || null,
+            end_date: end_date || null
+          },
           top_products: topProducts
         }
       });
@@ -274,39 +295,48 @@ class DashboardController {
     try {
       const { 
         period = 'today',
-        custom_date 
+        start_date,
+        end_date 
       } = req.query;
 
       // Calculate date range
       let startDate, endDate;
       const now = new Date();
       
-      switch (period) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-          break;
-        case 'yesterday':
-          const yesterday = new Date(now);
-          yesterday.setDate(yesterday.getDate() - 1);
-          startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-          endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
-          break;
-        case 'custom':
-          if (!custom_date) {
-            return res.status(400).json({
-              success: false,
-              message: 'Custom date is required when period is "custom"'
-            });
-          }
-          const customDate = new Date(custom_date);
-          startDate = new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate());
-          endDate = new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate(), 23, 59, 59);
-          break;
-        case 'lifetime':
-          startDate = new Date('1970-01-01');
-          endDate = new Date();
-          break;
+      // If start_date and end_date are provided, use them directly
+      if (start_date && end_date) {
+        startDate = new Date(start_date);
+        endDate = new Date(end_date);
+        endDate.setHours(23, 59, 59, 999);
+      } else if (start_date) {
+        startDate = new Date(start_date);
+        endDate = new Date(start_date);
+        endDate.setHours(23, 59, 59, 999);
+      } else if (end_date) {
+        startDate = new Date(end_date);
+        endDate = new Date(end_date);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        // Fall back to period-based logic
+        switch (period) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+            break;
+          case 'yesterday':
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+            endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+            break;
+          case 'lifetime':
+            startDate = new Date('1970-01-01');
+            endDate = new Date();
+            break;
+          default:
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        }
       }
 
       const shopSummary = await Sale.findAll({
@@ -335,10 +365,15 @@ class DashboardController {
 
       res.status(200).json({
         success: true,
-        message: `Sales summary by shop for ${period}`,
+        message: `Sales summary by shop${start_date || end_date ? ' for date range' : ` for ${period}`}`,
         data: {
-          period: period,
-          date_range: { start: startDate, end: endDate },
+          period: start_date || end_date ? 'custom_range' : period,
+          date_range: { 
+            start: startDate, 
+            end: endDate,
+            start_date: start_date || null,
+            end_date: end_date || null
+          },
           shop_summary: shopSummary
         }
       });

@@ -207,23 +207,38 @@ This is the backend service for the Shop Management System, providing APIs for s
 #### Dashboard Analytics
 - **GET** `/api/dashboard/analytics` - Main dashboard with product analytics
   ```bash
-  # Query Parameters:
-  # period=today/yesterday/custom/lifetime
-  # custom_date=2024-08-26 (required when period=custom)
-  # shop_id, category_id, brand_id (optional filters)
+  # Query Parameters (choose one approach):
+  
+  # Option 1: Date Range (Recommended)
+  # start_date=2024-08-01, end_date=2024-08-28
+  # start_date=2024-08-26 (single date)
+  # end_date=2024-08-26 (single date)
+  
+  # Option 2: Period-based (Still supported)
+  # period=today/yesterday/lifetime
+  
+  # Optional filters: shop_id, category_id, brand_id
   
   # Examples:
+  GET /api/dashboard/analytics?start_date=2024-08-01&end_date=2024-08-28
+  GET /api/dashboard/analytics?start_date=2024-08-26
   GET /api/dashboard/analytics?period=today
-  GET /api/dashboard/analytics?period=yesterday
-  GET /api/dashboard/analytics?period=custom&custom_date=2024-08-25
-  GET /api/dashboard/analytics?period=lifetime&shop_id=1
+  GET /api/dashboard/analytics?start_date=2024-08-01&end_date=2024-08-31&shop_id=1
   ```
   
   ```json
   // Response includes:
   {
     "success": true,
+    "message": "Dashboard data for date range",
     "data": {
+      "period": "custom_range",    // Shows "custom_range" when using dates
+      "date_range": {
+        "start": "2024-08-01T00:00:00Z",
+        "end": "2024-08-28T23:59:59Z",
+        "start_date": "2024-08-01",  // Original input
+        "end_date": "2024-08-28"     // Original input
+      },
       "summary": {
         "total_products": 25,
         "total_quantity_sold": 47,
@@ -249,24 +264,40 @@ This is the backend service for the Shop Management System, providing APIs for s
 
 - **GET** `/api/dashboard/top-products` - Top selling products by volume
   ```bash
-  # Query Parameters:
-  # period=today/yesterday/custom/lifetime
-  # custom_date=2024-08-26, limit=10, shop_id
+  # Query Parameters (choose one approach):
+  
+  # Option 1: Date Range (Recommended)
+  # start_date=2024-08-01, end_date=2024-08-28
+  # start_date=2024-08-26 (single date)
+  
+  # Option 2: Period-based (Still supported)
+  # period=today/yesterday/lifetime
+  
+  # Additional parameters: limit=10, shop_id
   
   # Examples:
+  GET /api/dashboard/top-products?start_date=2024-08-01&end_date=2024-08-31&limit=5
+  GET /api/dashboard/top-products?start_date=2024-08-26&limit=10
   GET /api/dashboard/top-products?period=today&limit=5
-  GET /api/dashboard/top-products?period=lifetime&limit=10
+  GET /api/dashboard/top-products?period=lifetime&limit=10&shop_id=1
   ```
 
 - **GET** `/api/dashboard/shop-summary` - Sales performance by shop
   ```bash
-  # Query Parameters:
-  # period=today/yesterday/custom/lifetime
-  # custom_date=2024-08-26
+  # Query Parameters (choose one approach):
+  
+  # Option 1: Date Range (Recommended)
+  # start_date=2024-08-01, end_date=2024-08-28
+  # start_date=2024-08-26 (single date)
+  
+  # Option 2: Period-based (Still supported)
+  # period=today/yesterday/lifetime
   
   # Examples:
+  GET /api/dashboard/shop-summary?start_date=2024-08-01&end_date=2024-08-31
+  GET /api/dashboard/shop-summary?start_date=2024-08-26
   GET /api/dashboard/shop-summary?period=today
-  GET /api/dashboard/shop-summary?period=custom&custom_date=2024-08-20
+  GET /api/dashboard/shop-summary?period=lifetime
   ```
 
 ## Database Schema
