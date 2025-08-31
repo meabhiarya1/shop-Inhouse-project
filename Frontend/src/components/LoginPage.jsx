@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-toastify';
+import axios from 'axios';
 
 export default function LoginInterface() {
   const [showPassword, setShowPassword] = useState(false);
@@ -11,7 +12,14 @@ export default function LoginInterface() {
 
   const handleSignIn = async () => {
     setError('');
-    const mobileNumber = (phone || '').replace(/\D/g, '');
+    let mobileNumber = (phone || '').replace(/\D/g, '');
+    // Strip country code +91/91 and optional leading 0
+    if (mobileNumber.length === 12 && mobileNumber.startsWith('91')) {
+      mobileNumber = mobileNumber.slice(-10);
+    }
+    if (mobileNumber.length === 11 && mobileNumber.startsWith('0')) {
+      mobileNumber = mobileNumber.slice(-10);
+    }
     if (mobileNumber.length !== 10) {
       setError('Enter a valid 10-digit mobile number');
       return;
@@ -22,24 +30,18 @@ export default function LoginInterface() {
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobileNumber, password })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Login failed');
+      const { data } = await axios.post('/api/auth/login', { mobileNumber, password });
+      if (!data?.success) {
+        throw new Error(data?.message || 'Login failed');
       }
-      // Persist token (simple localStorage for now)
-  if (data?.data?.token) {
+      if (data?.data?.token) {
         localStorage.setItem('auth_token', data.data.token);
       }
-  // Optional: redirect later; for now, show success
-  toast.success('Login successful');
+      toast.success('Login successful');
     } catch (e) {
-  setError(e.message || 'Something went wrong');
-  toast.error(e.message || 'Login failed');
+      const msg = e?.response?.data?.message || e.message || 'Login failed';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
