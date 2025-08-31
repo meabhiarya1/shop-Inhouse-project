@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Menu, Package, BarChart2, ShoppingCart, Settings, ChevronDown, LogOut, Building2, User } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { toast } from 'react-toastify'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, RadialBar, RadialBarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, CartesianGrid, RadialBar, RadialBarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -22,7 +22,7 @@ export default function Dashboard() {
   }
 
   const Sidebar = (
-    <div className="w-64 bg-[#0b1020] text-white lg:static lg:translate-x-0 h-full shadow-2xl">
+    <div className="w-64 bg-[#0b1020] text-white lg:static lg:translate-x-0 h-full shadow-2xl flex flex-col">
       <div className="p-6 border-b border-white/10">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-indigo-600/30 flex items-center justify-center text-indigo-400">
@@ -48,7 +48,7 @@ export default function Dashboard() {
           <span>Settings</span>
         </a>
       </nav>
-      <div className="mt-auto p-4 hidden lg:block">
+  <div className="mt-auto p-4">
         <div className="rounded-2xl p-4 bg-gradient-to-br from-indigo-600/30 to-purple-600/30 text-white">
           <p className="text-sm font-semibold">Need help?</p>
           <p className="text-xs text-white/70">Please check our docs</p>
@@ -72,16 +72,6 @@ export default function Dashboard() {
     { name: 'Oct', sales: 420, items: 520 },
     { name: 'Nov', sales: 460, items: 560 },
     { name: 'Dec', sales: 520, items: 610 },
-  ]
-
-  const activeUsers = [
-    { name: 'Mon', users: 300 },
-    { name: 'Tue', users: 500 },
-    { name: 'Wed', users: 200 },
-    { name: 'Thu', users: 450 },
-    { name: 'Fri', users: 350 },
-    { name: 'Sat', users: 600 },
-    { name: 'Sun', users: 250 },
   ]
 
   const satisfaction = [{ name: 'Satisfaction', value: 95, fill: '#34d399' }]
@@ -215,41 +205,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Bottom row */}
-          <div className="px-4 lg:px-8 py-4 grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10">
-              <div className="flex items-center justify-between mb-4">
-                <p className="font-semibold">Active Users</p>
-                <span className="text-xs text-emerald-400">(+23%) than last week</span>
-              </div>
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={activeUsers}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                    <XAxis dataKey="name" stroke="#ffffff50" />
-                    <YAxis stroke="#ffffff50" />
-                    <Tooltip contentStyle={{ background: '#0f1535', border: '1px solid #ffffff22', color: '#fff' }} />
-                    <Bar dataKey="users" fill="#8b5cf6" radius={[6,6,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10 xl:col-span-2">
-              <p className="font-semibold mb-4">Projects</p>
-              <div className="space-y-3">
-                {[{ name:'Chakra Soft UI Version', budget:'$14,000', completion:'60%' }, { name:'Add Progress Track', budget:'$3,000', completion:'10%' }, { name:'Fix Platform Errors', budget:'Not set', completion:'100%' }, { name:'Launch our Mobile App', budget:'$32,000', completion:'100%' }].map(p => (
-                  <div key={p.name} className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3">
-                    <span className="text-sm">{p.name}</span>
-                    <div className="flex items-center space-x-4 text-xs text-white/70">
-                      <span>{p.budget}</span>
-                      <span>{p.completion}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          {/* Bottom row removed per request */}
         </div>
       </div>
     </div>
