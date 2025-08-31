@@ -1,11 +1,49 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import { toast } from 'react-toastify';
 
 export default function LoginInterface() {
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSignIn = async () => {
+    setError('');
+    const mobileNumber = (phone || '').replace(/\D/g, '');
+    if (mobileNumber.length !== 10) {
+      setError('Enter a valid 10-digit mobile number');
+      return;
+    }
+    if (!password) {
+      setError('Password is required');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobileNumber, password })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Login failed');
+      }
+      // Persist token (simple localStorage for now)
+  if (data?.data?.token) {
+        localStorage.setItem('auth_token', data.data.token);
+      }
+  // Optional: redirect later; for now, show success
+  toast.success('Login successful');
+    } catch (e) {
+  setError(e.message || 'Something went wrong');
+  toast.error(e.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="w-full h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-pink-100 flex items-center justify-center relative overflow-hidden">
@@ -119,15 +157,17 @@ export default function LoginInterface() {
               <div>
                 <div className="relative">
                   <input
-                    type="email"
-        placeholder="Work email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    placeholder="Phone number"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-gray-900"
                   />
                   <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
                     <svg width="20" height="20" viewBox="0 0 24 24" className="text-gray-400">
-                      <path fill="currentColor" d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                      <path fill="currentColor" d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 011 1V20a1 1 0 01-1 1C11.85 21 3 12.15 3 1a1 1 0 011-1h3.5a1 1 0 011 1c0 1.24.2 2.45.57 3.57a1 1 0 01-.24 1.02l-2.21 2.2z"/>
                     </svg>
                   </div>
                 </div>
@@ -153,11 +193,14 @@ export default function LoginInterface() {
               </div>
 
               <button
-                onClick={() => alert('Sign in clicked')}
+                  onClick={handleSignIn}
                 className="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
               >
-                Sign in
+                  {loading ? 'Signing in…' : 'Sign in'}
               </button>
+                {error && (
+                  <p className="text-sm text-red-600 mt-2" role="alert">{error}</p>
+                )}
             </div>
           </div>
         </div>
