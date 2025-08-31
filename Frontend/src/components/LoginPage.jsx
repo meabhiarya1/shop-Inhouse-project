@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function LoginInterface() {
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -35,7 +37,8 @@ export default function LoginInterface() {
         throw new Error(data?.message || 'Login failed');
       }
       if (data?.data?.token) {
-        localStorage.setItem('auth_token', data.data.token);
+        // Save centrally as well
+        login(data.data.token, data.data.user);
       }
       toast.success('Login successful');
     } catch (e) {
