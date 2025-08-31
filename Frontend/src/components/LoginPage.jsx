@@ -10,23 +10,23 @@ export default function LoginInterface() {
   return (
     <div className="w-full h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-pink-100 flex items-center justify-center relative overflow-hidden">
       {/* Floating decorative elements */}
-      <div className="absolute top-16 left-20 w-6 h-6 bg-orange-300 rounded-full opacity-60 animate-pulse"></div>
-      <div className="absolute top-12 right-32 w-4 h-4 bg-yellow-300 rounded-full opacity-50"></div>
-      <div className="absolute top-8 right-16 w-8 h-4 bg-pink-400 rounded-full opacity-60"></div>
-      <div className="absolute top-36 right-8 w-3 h-3 bg-blue-400 rounded-full opacity-70"></div>
-      <div className="absolute bottom-32 left-8 w-4 h-4 bg-blue-300 rounded-full opacity-60"></div>
-      <div className="absolute bottom-16 left-32 w-2 h-2 bg-yellow-400 rounded-full opacity-50"></div>
-      <div className="absolute bottom-20 right-20 w-16 h-16 bg-green-300 rounded-full opacity-40"></div>
+      <div className="hidden lg:block absolute top-16 left-20 w-6 h-6 bg-orange-300 rounded-full opacity-60 animate-pulse"></div>
+      <div className="hidden lg:block absolute top-12 right-32 w-4 h-4 bg-yellow-300 rounded-full opacity-50"></div>
+      <div className="hidden lg:block absolute top-8 right-16 w-8 h-4 bg-pink-400 rounded-full opacity-60"></div>
+      <div className="hidden lg:block absolute top-36 right-8 w-3 h-3 bg-blue-400 rounded-full opacity-70"></div>
+      <div className="hidden lg:block absolute bottom-32 left-8 w-4 h-4 bg-blue-300 rounded-full opacity-60"></div>
+      <div className="hidden lg:block absolute bottom-16 left-32 w-2 h-2 bg-yellow-400 rounded-full opacity-50"></div>
+      <div className="hidden lg:block absolute bottom-20 right-20 w-16 h-16 bg-green-300 rounded-full opacity-40"></div>
       
       <div className="w-full max-w-6xl mx-4 bg-white rounded-3xl shadow-2xl overflow-hidden flex">
         {/* Left Panel - App Showcase */}
-        <div className="w-1/2 bg-blue-600 p-12 text-white relative overflow-hidden">
+        <div className="hidden lg:block lg:w-1/2 bg-blue-600 p-12 text-white relative overflow-hidden">
           {/* Background decorative elements */}
-          <div className="absolute top-4 left-4 w-4 h-4 bg-orange-300 rounded-full opacity-30"></div>
-          <div className="absolute top-20 left-8 w-2 h-2 bg-green-300 rounded-full opacity-40"></div>
-          <div className="absolute bottom-20 left-4 w-6 h-6 bg-red-300 rounded-full opacity-25"></div>
-          <div className="absolute bottom-8 right-8 w-3 h-3 bg-yellow-300 rounded-full opacity-35"></div>
-          <div className="absolute top-1/2 left-2 w-2 h-2 bg-green-400 rounded-full opacity-30"></div>
+          <div className="hidden lg:block absolute top-4 left-4 w-4 h-4 bg-orange-300 rounded-full opacity-30"></div>
+          <div className="hidden lg:block absolute top-20 left-8 w-2 h-2 bg-green-300 rounded-full opacity-40"></div>
+          <div className="hidden lg:block absolute bottom-20 left-4 w-6 h-6 bg-red-300 rounded-full opacity-25"></div>
+          <div className="hidden lg:block absolute bottom-8 right-8 w-3 h-3 bg-yellow-300 rounded-full opacity-35"></div>
+          <div className="hidden lg:block absolute top-1/2 left-2 w-2 h-2 bg-green-400 rounded-full opacity-30"></div>
           
       {/* Main info card */}
           <div className="bg-white text-gray-800 rounded-2xl p-6 mb-6 shadow-xl transform -rotate-6 hover:rotate-0 transition-all duration-500 relative z-10">
@@ -107,7 +107,7 @@ export default function LoginInterface() {
         </div>
 
         {/* Right Panel - Login Form */}
-        <div className="w-1/2 p-12 flex flex-col justify-center bg-white">
+  <div className="w-full lg:w-1/2 p-12 flex flex-col justify-center bg-white">
           <div className="max-w-sm mx-auto w-full">
             <div className="mb-8">
              
