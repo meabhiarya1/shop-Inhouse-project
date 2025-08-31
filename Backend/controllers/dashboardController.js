@@ -73,9 +73,16 @@ class DashboardController {
       if (category_id) productWhere.category_id = category_id;
       if (brand_id) productWhere.brand_id = brand_id;
 
-      // Get products with their current quantity and sales data
+      // Get products with their current quantity and aggregated sales data
+      // Note: We aggregate sales on the root (Product) to avoid selecting sales.id which breaks ONLY_FULL_GROUP_BY
       const products = await Product.findAll({
         where: productWhere,
+        attributes: {
+          include: [
+            [fn('COALESCE', fn('SUM', col('sales.quantity_sold')), 0), 'total_sold'],
+            [fn('COALESCE', fn('SUM', col('sales.total_amount')), 0), 'total_revenue']
+          ]
+        },
         include: [
           {
             model: Brand,
@@ -101,10 +108,7 @@ class DashboardController {
               }
             },
             required: false, // LEFT JOIN to include products with no sales
-            attributes: [
-              [fn('SUM', col('sales.quantity_sold')), 'total_sold'],
-              [fn('SUM', col('sales.total_amount')), 'total_revenue']
-            ]
+            attributes: [] // avoid selecting sales.id to satisfy ONLY_FULL_GROUP_BY
           }
         ],
         group: ['Product.id'],
@@ -113,16 +117,15 @@ class DashboardController {
 
       // Process the data to get cleaner format
       const dashboardData = products.map(product => {
-        const salesData = product.sales && product.sales.length > 0 ? product.sales[0] : null;
-        const totalSold = salesData ? parseInt(salesData.dataValues.total_sold) || 0 : 0;
-        const totalRevenue = salesData ? parseFloat(salesData.dataValues.total_revenue) || 0 : 0;
+        const totalSold = parseInt(product.get('total_sold')) || 0;
+        const totalRevenue = parseFloat(product.get('total_revenue')) || 0;
 
         return {
           id: product.id,
           product_name: product.product_name,
           current_quantity: product.quantity,
           quantity_sold: totalSold,
-          remaining_quantity: product.quantity,
+          remaining_quantity: Math.max(0, (product.quantity || 0) - totalSold),
           total_revenue: totalRevenue,
           dimensions: {
             length: product.length,
@@ -133,7 +136,7 @@ class DashboardController {
           brand: product.brand,
           shop: product.shop,
           category: product.category,
-          last_updated: product.updated_at
+          last_updated: product.updatedAt
         };
       });
 
@@ -339,7 +342,7 @@ class DashboardController {
         }
       }
 
-      const shopSummary = await Sale.findAll({
+  const shopSummary = await Sale.findAll({
         where: {
           sale_date: {
             [Op.between]: [startDate, endDate]
@@ -349,7 +352,8 @@ class DashboardController {
           {
             model: Shop,
             as: 'shop',
-            attributes: ['id', 'shop_name', 'location', 'shop_type']
+    // Shop has no 'location' column; use city/state if needed
+    attributes: ['id', 'shop_name', 'shop_type', 'city', 'state']
           }
         ],
         attributes: [
