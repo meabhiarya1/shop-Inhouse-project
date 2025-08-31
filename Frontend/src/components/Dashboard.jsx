@@ -79,7 +79,7 @@ export default function Dashboard() {
   return (
     <div className="w-full min-h-screen bg-[#0a0f1e] flex items-stretch justify-center relative overflow-hidden">
       {/* Container */}
-      <div className="w-full max-w-7xl mx-4 my-6 bg-[#0f1535] rounded-3xl shadow-2xl overflow-hidden flex">
+      <div className="w-full max-w-7xl mx-4 my-6 bg-[#0f1535] rounded-3xl shadow-2xl overflow-hidden flex max-[500px]:mx-2 max-[500px]:my-3">
         {/* Sidebar (mobile overlay) */}
         <div className="lg:block hidden">
           {Sidebar}
@@ -97,29 +97,29 @@ export default function Dashboard() {
         {/* Main content */}
         <div className="flex-1 flex flex-col">
           {/* Navbar */}
-          <div className="h-16 px-4 lg:px-8 flex items-center justify-between border-b border-white/10 bg-[#0f1535] text-white">
+          <div className="h-16 px-4 lg:px-8 flex items-center justify-between border-b border-white/10 bg-[#0f1535] text-white max-[500px]:h-14 max-[500px]:px-3">
             <div className="flex items-center space-x-3">
-              <button className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20" onClick={() => setMobileSidebarOpen(true)}>
+              <button className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 max-[500px]:w-9 max-[500px]:h-9" onClick={() => setMobileSidebarOpen(true)}>
                 <Menu size={20} />
               </button>
-              <h1 className="text-xl font-bold">Dashboard</h1>
+              <h1 className="text-xl font-bold max-[500px]:text-lg">Dashboard</h1>
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 max-[500px]:space-x-2">
               {/* Shops dropdown */}
               <div className="relative">
-                <div className="flex items-center px-3 py-2 bg-white/10 border border-white/10 rounded-xl">
-                  <Building2 size={18} className="text-white/70 mr-2" />
+                <div className="flex items-center px-3 py-2 bg-white/10 border border-white/10 rounded-xl max-[500px]:px-2 max-[500px]:py-1">
+                  <Building2 size={18} className="text-white/70 mr-2 max-[500px]:hidden" />
                   <select
                     value={selectedShop}
                     onChange={(e) => setSelectedShop(e.target.value)}
-                    className="appearance-none bg-transparent pr-6 text-sm text-white focus:outline-none"
+                    className="appearance-none bg-transparent pr-6 text-sm text-white focus:outline-none max-[500px]:pr-4 max-[500px]:text-xs"
                   >
                     {shops.map(s => (
                       <option value={s.id} key={s.id}>{s.name}</option>
                     ))}
                   </select>
-                  <ChevronDown size={16} className="text-white/70 -ml-5" />
+                  <ChevronDown size={16} className="text-white/70 -ml-5 max-[500px]:-ml-4" />
                 </div>
               </div>
 
@@ -145,12 +145,12 @@ export default function Dashboard() {
           </div>
 
           {/* Top stats cards */}
-          <div className="p-4 lg:p-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="p-4 lg:p-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 max-[500px]:p-3 max-[500px]:gap-3">
             {[{ label: "Today's Money", value: '$53,000', change: '+5%' }, { label: "Today's Users", value: '2,300', change: '+5%' }, { label: 'New Clients', value: '+3,020', change: '-14%' }, { label: 'Total Sales', value: '$173,000', change: '+8%' }].map((c) => (
-              <div key={c.label} className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10">
-                <p className="text-xs text-white/60">{c.label}</p>
+              <div key={c.label} className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10 max-[500px]:p-4">
+                <p className="text-xs text-white/60 max-[500px]:text-[10px]">{c.label}</p>
                 <div className="mt-3 flex items-end justify-between">
-                  <p className="text-2xl font-extrabold">{c.value}</p>
+                  <p className="text-2xl font-extrabold max-[500px]:text-xl">{c.value}</p>
                   <span className={`text-xs ${c.change.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}`}>{c.change}</span>
                 </div>
               </div>
@@ -158,14 +158,14 @@ export default function Dashboard() {
           </div>
 
           {/* Charts row */}
-          <div className="px-4 lg:px-8 grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="px-4 lg:px-8 grid grid-cols-1 xl:grid-cols-3 gap-4 max-[500px]:px-3 max-[500px]:gap-3">
             {/* Area chart */}
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10 xl:col-span-2">
               <div className="flex items-center justify-between mb-4">
                 <p className="font-semibold">Sales Overview</p>
                 <span className="text-xs text-emerald-400">(+5%) more in 2025</span>
               </div>
-              <div className="h-64">
+              <div className="h-56 sm:h-60 md:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={salesArea} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <defs>
@@ -192,7 +192,7 @@ export default function Dashboard() {
             {/* Radial satisfaction */}
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10">
               <p className="font-semibold mb-4">Satisfaction Rate</p>
-              <div className="h-64 flex items-center justify-center">
+              <div className="h-48 sm:h-56 md:h-64 flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <RadialBarChart innerRadius="70%" outerRadius="100%" data={satisfaction} startAngle={90} endAngle={-270}>
                     <RadialBar minAngle={15} background clockWise dataKey="value" cornerRadius={8} fill="#34d399" />
@@ -200,7 +200,7 @@ export default function Dashboard() {
                   </RadialBarChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-center text-3xl font-extrabold">95%</p>
+              <p className="text-center text-3xl font-extrabold max-[500px]:text-2xl">95%</p>
               <p className="text-center text-xs text-white/60">Based on 61 ratings</p>
             </div>
           </div>
