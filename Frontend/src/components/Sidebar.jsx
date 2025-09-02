@@ -1,5 +1,5 @@
 import React from 'react'
-import { Package, BarChart2, ShoppingCart, Settings } from 'lucide-react'
+import { Package, BarChart2, ShoppingCart, Settings, Layers } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 export default function Sidebar() {
@@ -35,6 +35,15 @@ export default function Sidebar() {
         >
           <ShoppingCart size={18} />
           <span>Sales</span>
+        </NavLink>
+        <NavLink
+          to="/categories"
+          className={({ isActive }) =>
+            `flex items-center space-x-3 px-3 py-2 rounded-xl ${isActive ? 'bg-indigo-600/20 text-indigo-300 font-medium' : 'hover:bg-white/5 text-white/80'}`
+          }
+        >
+          <Layers size={18} />
+          <span>Categories</span>
         </NavLink>
         <a className="flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80" href="#">
           <Settings size={18} />

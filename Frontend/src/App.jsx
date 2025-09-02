@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard'
 import { useAuth } from './context/AuthContext'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Salesboard from './components/Salesboard'
+import Categories from './components/Categories'
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, initialized } = useAuth()
@@ -27,6 +28,14 @@ export default function App() {
         element={
           <PrivateRoute>
             <Salesboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/categories"
+        element={
+          <PrivateRoute>
+            <Categories />
           </PrivateRoute>
         }
       />
