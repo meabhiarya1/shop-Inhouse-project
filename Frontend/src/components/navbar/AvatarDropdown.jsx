@@ -13,7 +13,7 @@ export default function AvatarDropdown() {
     <div className="relative">
       <button
         onClick={() => setAvatarOpen((v) => !v)}
-        className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow"
+        className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow cursor-pointer"
       >
         <User size={18} />
       </button>
@@ -25,7 +25,7 @@ export default function AvatarDropdown() {
           </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-white/10"
+            className="w-full flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-white/10 cursor-pointer "
           >
             <LogOut size={16} />
             <span>Logout</span>
