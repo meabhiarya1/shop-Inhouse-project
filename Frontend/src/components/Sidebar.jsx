@@ -37,6 +37,15 @@ export default function Sidebar() {
           <span>Sales</span>
         </NavLink>
         <NavLink
+          to="/products"
+          className={({ isActive }) =>
+            `flex items-center space-x-3 px-3 py-2 rounded-xl ${isActive ? 'bg-indigo-600/20 text-indigo-300 font-medium' : 'hover:bg-white/5 text-white/80'}`
+          }
+        >
+          <Package size={18} />
+          <span>Products</span>
+        </NavLink>
+        <NavLink
           to="/categories"
           className={({ isActive }) =>
             `flex items-center space-x-3 px-3 py-2 rounded-xl ${isActive ? 'bg-indigo-600/20 text-indigo-300 font-medium' : 'hover:bg-white/5 text-white/80'}`
@@ -45,10 +54,7 @@ export default function Sidebar() {
           <Layers size={18} />
           <span>Categories</span>
         </NavLink>
-        <a className="flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80" href="#">
-          <Settings size={18} />
-          <span>Settings</span>
-        </a>
+      
       </nav>
       <div className="mt-auto p-4">
         <div className="rounded-2xl p-4 bg-gradient-to-br from-indigo-600/30 to-purple-600/30 text-white">

@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard'
 import { useAuth } from './context/AuthContext'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Salesboard from './components/Salesboard'
+import Products from './components/Products'
 import Categories from './components/Categories'
 
 function PrivateRoute({ children }) {
@@ -36,6 +37,14 @@ export default function App() {
         element={
           <PrivateRoute>
             <Categories />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/products"
+        element={
+          <PrivateRoute>
+            <Products />
           </PrivateRoute>
         }
       />
