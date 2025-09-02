@@ -2,16 +2,41 @@ import React from 'react'
 import LoginPage from './components/LoginPage'
 import Dashboard from './components/Dashboard'
 import { useAuth } from './context/AuthContext'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import Salesboard from './components/Salesboard'
 
-function App() {
-  const { isAuthenticated } = useAuth()
-  return isAuthenticated ? <Dashboard /> : <LoginPage />
+function PrivateRoute({ children }) {
+  const { isAuthenticated, initialized } = useAuth()
+  if (!initialized) return null
+  return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
-export default App
+export default function App() {
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <PrivateRoute>
+            <Dashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/sales"
+        element={
+          <PrivateRoute>
+            <Salesboard />
+          </PrivateRoute>
+        }
+      />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
 
 
 
 
 
-  

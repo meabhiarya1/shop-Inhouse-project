@@ -13,7 +13,7 @@ export default function ShopDropdown() {
           onChange={(e) => setSelectedShop(e.target.value)}
           className="appearance-none bg-transparent pr-6 text-sm text-white focus:outline-none max-[500px]:pr-4 max-[500px]:text-xs"
         >
-          <option value="all">All Shops Data</option>
+          <option value="all">All Shops</option>
           {Array.isArray(shops) && shops.map((s) => (
             <option value={s.id} key={s.id}>
               {s.shop_name || s.name}

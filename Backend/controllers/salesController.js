@@ -144,28 +144,56 @@ class SalesController {
         product_id, 
         payment_method,
         start_date,
-        end_date 
+        end_date,
+        period = 'today' 
       } = req.query;
 
       // Build where clause
       const whereClause = {};
       
-      if (shop_id) whereClause.shop_id = shop_id;
+      const isAllShops = typeof shop_id === 'string' && shop_id.trim().toLowerCase() === 'all';
+      if (shop_id && !isAllShops) whereClause.shop_id = shop_id;
       if (product_id) whereClause.product_id = product_id;
       if (payment_method) whereClause.payment_method = payment_method;
       
       if (start_date && end_date) {
-        whereClause.sale_date = {
-          [Op.between]: [new Date(start_date), new Date(end_date)]
-        };
+        const s = new Date(start_date);
+        const e = new Date(end_date);
+        e.setHours(23,59,59,999);
+        whereClause.sale_date = { [Op.between]: [s, e] };
       } else if (start_date) {
-        whereClause.sale_date = {
-          [Op.gte]: new Date(start_date)
-        };
+        const s = new Date(start_date);
+        const e = new Date(start_date);
+        e.setHours(23,59,59,999);
+        whereClause.sale_date = { [Op.between]: [s, e] };
       } else if (end_date) {
-        whereClause.sale_date = {
-          [Op.lte]: new Date(end_date)
-        };
+        const s = new Date(end_date);
+        const e = new Date(end_date);
+        e.setHours(23,59,59,999);
+        whereClause.sale_date = { [Op.between]: [s, e] };
+      } else if (period) {
+        const now = new Date();
+        let s, e;
+        switch (period) {
+          case 'today':
+            s = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            break;
+          case 'yesterday':
+            const y = new Date(now);
+            y.setDate(y.getDate() - 1);
+            s = new Date(y.getFullYear(), y.getMonth(), y.getDate());
+            e = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
+            break;
+          case 'lifetime':
+            s = new Date('1970-01-01');
+            e = new Date();
+            break;
+          default:
+            s = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        }
+        whereClause.sale_date = { [Op.between]: [s, e] };
       }
 
       const offset = (parseInt(page) - 1) * parseInt(limit);

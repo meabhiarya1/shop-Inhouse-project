@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Menu, Package, BarChart2, ShoppingCart, Settings, ChevronDown, LogOut, Building2, User } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { toast } from 'react-toastify'
 import { BarChart, Bar, CartesianGrid, RadialBar, RadialBarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -8,6 +8,8 @@ import { DashboardProvider, useDashboard } from '../context/DashboardContext.jsx
 import PeriodSelect from './navbar/PeriodSelect.jsx'
 import ShopDropdown from './navbar/ShopDropdown.jsx'
 import AvatarDropdown from './navbar/AvatarDropdown.jsx'
+import Sidebar from './Sidebar.jsx'
+import { useLocation } from 'react-router-dom'
 
 function DashboardInner() {
   const { user } = useAuth()
@@ -18,6 +20,9 @@ function DashboardInner() {
   const [shopSummary, setShopSummary] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const location = useLocation()
+
+  const title = useMemo(() => (location.pathname.startsWith('/sales') ? 'Sales' : 'Dashboard'), [location.pathname])
 
   // Load dashboard data when shop/period changes
   useEffect(() => {
@@ -62,64 +67,24 @@ function DashboardInner() {
     return [{ name: 'Products With Sales', value: pct, fill: '#34d399' }]
   }, [analytics])
 
-  const Sidebar = (
-    <div className="w-64 bg-[#0b1020] text-white lg:static lg:translate-x-0 h-full shadow-2xl flex flex-col">
-      <div className="p-6 border-b border-white/10">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600/30 flex items-center justify-center text-indigo-400">
-            <Package size={22} />
-          </div>
-          <div>
-            <p className="font-bold leading-tight">Inventory</p>
-            <p className="text-xs text-white/60">Manager</p>
-          </div>
-        </div>
-      </div>
-      <nav className="p-4 space-y-2">
-        <a className="flex items-center space-x-3 px-3 py-2 rounded-xl bg-indigo-600/20 text-indigo-300 font-medium" href="#">
-          <BarChart2 size={18} />
-          <span>Dashboard</span>
-        </a>
-        <a className="flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80" href="#">
-          <ShoppingCart size={18} />
-          <span>Sales</span>
-        </a>
-        <a className="flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80" href="#">
-          <Settings size={18} />
-          <span>Settings</span>
-        </a>
-      </nav>
-      <div className="mt-auto p-4">
-        <div className="rounded-2xl p-4 bg-gradient-to-br from-indigo-600/30 to-purple-600/30 text-white">
-          <p className="text-sm font-semibold">Need help?</p>
-          <p className="text-xs text-white/70">Please check our docs</p>
-          <button className="mt-3 text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-lg">Documentation</button>
-        </div>
-      </div>
-    </div>
-  )
-
   return (
     <div className="w-full min-h-screen bg-[#0a0f1e] flex items-stretch justify-center relative overflow-hidden">
       <div className="w-full max-w-7xl mx-4 my-6 bg-[#0f1535] rounded-3xl shadow-2xl overflow-hidden flex max-[500px]:mx-2 max-[500px]:my-3">
-        <div className="lg:block hidden">{Sidebar}</div>
+        <div className="lg:block hidden"><Sidebar /></div>
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-40 lg:hidden">
             <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebarOpen(false)} />
-            <div className="absolute left-0 top-0 bottom-0 z-50">{Sidebar}</div>
+            <div className="absolute left-0 top-0 bottom-0 z-50"><Sidebar /></div>
           </div>
         )}
 
         <div className="flex-1 flex flex-col">
           <div className="h-16 px-4 lg:px-8 flex items-center justify-between border-b border-white/10 bg-[#0f1535] text-white max-[500px]:h-14 max-[500px]:px-3">
             <div className="flex items-center space-x-3">
-              <button
-                className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 max-[500px]:w-9 max-[500px]:h-9"
-                onClick={() => setMobileSidebarOpen(true)}
-              >
+              <button className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 max-[500px]:w-9 max-[500px]:h-9" onClick={() => setMobileSidebarOpen(true)}>
                 <Menu size={20} />
               </button>
-              <h1 className="text-xl font-bold max-[500px]:text-lg">Dashboard</h1>
+              <h1 className="text-xl font-bold max-[500px]:text-lg">{title}</h1>
             </div>
 
             <div className="flex items-center space-x-4 max-[500px]:space-x-2">
