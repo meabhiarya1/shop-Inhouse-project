@@ -21,6 +21,9 @@ class DashboardController {
         brand_id 
       } = req.query;
 
+      // Normalize shop filter and treat 'all' as no filter
+      const isAllShops = typeof shop_id === 'string' && shop_id.trim().toLowerCase() === 'all';
+
       // Calculate date range based on parameters
       let startDate, endDate;
       const now = new Date();
@@ -68,8 +71,8 @@ class DashboardController {
       }
 
       // Build where clause for products
-      const productWhere = {};
-      if (shop_id) productWhere.shop_id = shop_id;
+  const productWhere = {};
+  if (shop_id && !isAllShops) productWhere.shop_id = shop_id;
       if (category_id) productWhere.category_id = category_id;
       if (brand_id) productWhere.brand_id = brand_id;
 
@@ -185,6 +188,9 @@ class DashboardController {
         shop_id 
       } = req.query;
 
+      // Normalize shop filter and treat 'all' as no filter
+      const isAllShops = typeof shop_id === 'string' && shop_id.trim().toLowerCase() === 'all';
+
       // Calculate date range
       let startDate, endDate;
       const now = new Date();
@@ -231,7 +237,7 @@ class DashboardController {
           [Op.between]: [startDate, endDate]
         }
       };
-      if (shop_id) salesWhere.shop_id = shop_id;
+  if (shop_id && !isAllShops) salesWhere.shop_id = shop_id;
 
       const topProducts = await Sale.findAll({
         where: salesWhere,
@@ -299,8 +305,12 @@ class DashboardController {
       const { 
         period = 'today',
         start_date,
-        end_date 
+        end_date,
+        shop_id 
       } = req.query;
+
+      // Normalize shop filter and treat 'all' as no filter
+      const isAllShops = typeof shop_id === 'string' && shop_id.trim().toLowerCase() === 'all';
 
       // Calculate date range
       let startDate, endDate;
@@ -346,7 +356,8 @@ class DashboardController {
         where: {
           sale_date: {
             [Op.between]: [startDate, endDate]
-          }
+          },
+          ...(shop_id && !isAllShops ? { shop_id } : {})
         },
         include: [
           {
