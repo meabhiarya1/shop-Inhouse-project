@@ -65,8 +65,9 @@ const multipleDeleteValidation = [
 
 // Routes
 router.get('/', ProductController.getAllProducts);
-router.get('/:id', ProductController.getProductById);
+// Place the more specific route before the parameterized :id to avoid shadowing
 router.get('/shop/:shopId', ProductController.getAllProductsByShopId);
+router.get('/:id', ProductController.getProductById);
 router.post('/', productValidation, ProductController.createProduct);
 router.put('/:id', productValidation, ProductController.updateProduct);
 router.delete('/delete/multiple', multipleDeleteValidation, ProductController.deleteMultipleProducts);

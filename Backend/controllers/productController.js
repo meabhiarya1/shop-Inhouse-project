@@ -10,7 +10,52 @@ class ProductController {
   // Get all products
   static async getAllProducts(req, res) {
     try {
+      const { period, start_date, end_date, shop_id } = req.query;
+
+      // Build where clause based on optional filters
+      const where = {};
+      // Shop filter: if provided and not 'all', filter; if 'all' or missing, no filter
+      if (shop_id && String(shop_id).toLowerCase() !== 'all') {
+        where.shop_id = shop_id;
+      }
+
+      // Date filter based on createdAt
+      let rangeStart = null;
+      let rangeEnd = null;
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+      if (period) {
+        const p = String(period).toLowerCase();
+        if (p === 'today') {
+          rangeStart = startOfToday;
+          rangeEnd = endOfToday;
+        } else if (p === 'yesterday') {
+          const y = new Date(startOfToday);
+          y.setDate(y.getDate() - 1);
+          rangeStart = y;
+          rangeEnd = new Date(startOfToday.getTime() - 1);
+        } else if (p === 'lifetime') {
+          // no range filter
+        }
+      }
+
+      if (!rangeStart && start_date && end_date) {
+        const s = new Date(start_date);
+        const e = new Date(end_date);
+        if (!isNaN(s) && !isNaN(e)) {
+          rangeStart = s;
+          rangeEnd = e;
+        }
+      }
+
+      if (rangeStart && rangeEnd) {
+        where.createdAt = { [Op.between]: [rangeStart, rangeEnd] };
+      }
+
       const products = await Product.findAll({
+        where,
         include: [
           {
             model: Brand,
@@ -94,18 +139,61 @@ class ProductController {
   static async getAllProductsByShopId(req, res) {
     try {
       const { shopId } = req.params;
+      const { period, start_date, end_date } = req.query;
 
-      // Check if shop exists
-      const shop = await Shop.findByPk(shopId);
-      if (!shop) {
-        return res.status(404).json({
-          success: false,
-          message: 'Shop not found'
-        });
+      // Build where clause
+      const where = {};
+      let shop = null;
+      const isAll = String(shopId).toLowerCase() === 'all';
+      if (!isAll) {
+        // Check if shop exists
+        shop = await Shop.findByPk(shopId);
+        if (!shop) {
+          return res.status(404).json({
+            success: false,
+            message: 'Shop not found'
+          });
+        }
+        where.shop_id = shopId;
+      }
+
+      // Date filter based on createdAt
+      let rangeStart = null;
+      let rangeEnd = null;
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+      if (period) {
+        const p = String(period).toLowerCase();
+        if (p === 'today') {
+          rangeStart = startOfToday;
+          rangeEnd = endOfToday;
+        } else if (p === 'yesterday') {
+          const y = new Date(startOfToday);
+          y.setDate(y.getDate() - 1);
+          rangeStart = y;
+          rangeEnd = new Date(startOfToday.getTime() - 1);
+        } else if (p === 'lifetime') {
+          // no range filter
+        }
+      }
+
+      if (!rangeStart && start_date && end_date) {
+        const s = new Date(start_date);
+        const e = new Date(end_date);
+        if (!isNaN(s) && !isNaN(e)) {
+          rangeStart = s;
+          rangeEnd = e;
+        }
+      }
+
+      if (rangeStart && rangeEnd) {
+        where.createdAt = { [Op.between]: [rangeStart, rangeEnd] };
       }
 
       const products = await Product.findAll({
-        where: { shop_id: shopId },
+        where,
         include: [
           {
             model: Brand,
