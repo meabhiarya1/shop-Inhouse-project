@@ -15,6 +15,10 @@ Category.init({
     allowNull: false,
     validate: {
       notEmpty: { msg: 'Category name is required' }
+    },
+    unique: {
+      name: 'category_unique',
+      msg: 'Category already exists'
     }
   }
 }, {

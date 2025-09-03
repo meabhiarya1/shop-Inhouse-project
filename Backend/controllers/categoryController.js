@@ -7,13 +7,43 @@ class CategoryController {
   // Get all categories
   static async getAllCategories(req, res) {
     try {
-      const categories = await Category.findAll({
-        order: [['category_name', 'ASC']]
+      // Validate query (from express-validator in route)
+      const errors = require('express-validator').validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation errors',
+          errors: errors.array()
+        });
+      }
+
+      // Pagination: market standard page & limit with sensible defaults and caps
+      const rawPage = parseInt(req.query.page || '1', 10);
+      const rawLimit = parseInt(req.query.limit || '10', 10);
+      const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+      const limitUncapped = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 10;
+      const limit = Math.min(Math.max(limitUncapped, 1), 50); // safety cap
+      const offset = (page - 1) * limit;
+
+      const { count, rows } = await Category.findAndCountAll({
+        order: [['category_name', 'ASC']],
+        limit,
+        offset
       });
+
+      const totalPages = Math.max(Math.ceil(count / limit), 1);
 
       res.status(200).json({
         success: true,
-        data: categories
+        data: rows,
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
       });
     } catch (error) {
       console.error('Error fetching categories:', error);

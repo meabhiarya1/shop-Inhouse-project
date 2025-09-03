@@ -1,5 +1,5 @@
 const express = require('express');
-const { body } = require('express-validator');
+const { body, query } = require('express-validator');
 const CategoryController = require('../controllers/categoryController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -21,7 +21,20 @@ const categoryValidation = [
 ];
 
 // Routes
-router.get('/', CategoryController.getAllCategories);
+const paginationValidation = [
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('page must be a positive integer')
+    .toInt(),
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage('limit must be an integer between 1 and 50')
+    .toInt()
+];
+
+router.get('/', paginationValidation, CategoryController.getAllCategories);
 router.get('/:categoryId/products', CategoryController.getAllProductsByCategoryId);
 router.post('/', categoryValidation, CategoryController.createCategory);
 router.put('/:id', categoryValidation, CategoryController.updateCategory);

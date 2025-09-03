@@ -12,6 +12,10 @@ function CategoriesInner() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(10)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -24,12 +28,32 @@ function CategoriesInner() {
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` }), [])
 
-  const loadCategories = async () => {
+  const loadCategories = async (p = page, l = limit) => {
     setLoading(true)
     try {
-      const { data } = await axios.get('/api/categories', { headers })
+      const { data } = await axios.get('/api/categories', {
+        headers,
+        params: { page: p, limit: l }
+      })
+
+      console.log(data)
       const list = Array.isArray(data?.data) ? data.data : []
+      const meta = data?.pagination || { page: p, limit: l, total: list.length, totalPages: 1 }
+
+      // If current page exceeded after deletions, jump back to last page
+      if (p > 1 && list.length === 0 && meta.totalPages && meta.totalPages < p) {
+        setPage(meta.totalPages)
+        setTotal(meta.total)
+        setTotalPages(meta.totalPages || 1)
+        setLoading(false)
+        return
+      }
+
       setCategories(list)
+      setPage(meta.page || p)
+      setLimit(meta.limit || l)
+      setTotal(meta.total ?? list.length)
+      setTotalPages(meta.totalPages || 1)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to load categories')
     } finally {
@@ -37,7 +61,7 @@ function CategoriesInner() {
     }
   }
 
-  useEffect(() => { loadCategories() }, [])
+  useEffect(() => { loadCategories(page, limit) }, [page, limit])
 
   const openCreate = () => {
     setFormName('')
@@ -50,7 +74,8 @@ function CategoriesInner() {
       await axios.post('/api/categories', { category_name: formName }, { headers })
       toast.success('Category created')
       setCreateOpen(false)
-      loadCategories()
+      setPage(1)
+      loadCategories(1, limit)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to create category')
     }
@@ -69,7 +94,7 @@ function CategoriesInner() {
       await axios.put(`/api/categories/${activeCategory.id}`, { category_name: formName }, { headers })
       toast.success('Category updated')
       setEditOpen(false)
-      loadCategories()
+      loadCategories(page, limit)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to update category')
     }
@@ -86,7 +111,7 @@ function CategoriesInner() {
       await axios.delete(`/api/categories/${activeCategory.id}`, { headers })
       toast.success('Category deleted')
       setDeleteOpen(false)
-      loadCategories()
+      loadCategories(page, limit)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to delete category')
     }
@@ -136,7 +161,7 @@ function CategoriesInner() {
           {/* Content */}
           <div className="p-4 lg:p-8 text-white">
             <div className="flex items-center justify-between mb-4">
-              <div className="text-white/70 text-sm">Total: {categories.length}</div>
+              <div className="text-white/70 text-sm">Total: {total}</div>
               <button onClick={openCreate} className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm">
                 <Plus size={16} />
                 <span>Create Category</span>
@@ -145,40 +170,79 @@ function CategoriesInner() {
 
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] border border-white/10">
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="text-white/70">
-                    <tr>
-                      <th className="text-left p-2">Name</th>
-                      <th className="text-left p-2">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <tr><td className="p-2" colSpan={2}>Loading...</td></tr>
-                    ) : categories.length === 0 ? (
-                      <tr><td className="p-2" colSpan={2}>No categories found</td></tr>
-                    ) : (
-                      categories.map((c) => (
-                        <tr key={c.id} className="border-t border-white/10 hover:bg-white/5">
-                          <td className="p-2 cursor-pointer" onClick={() => openDetails(c)}>{c.category_name}</td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-2">
-                              <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openEdit(c)} title="Edit">
-                                <Pencil size={14} />
-                              </button>
-                              <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openDelete(c)} title="Delete">
-                                <Trash2 size={14} />
-                              </button>
-                              <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openDetails(c)} title="Details">
-                                <Info size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                {/* Scrollable region with sticky header; keeps columns aligned */}
+                <div className="max-h-[440px] scroll-y-invisible overflow-y-auto rounded-lg">
+                  <table className="min-w-full table-fixed text-sm">
+                    <thead className="sticky top-0 z-10 bg-[#121a3d] text-white/70">
+                      <tr>
+                        <th className="text-left p-2 pr-4">Name</th>
+                        <th className="text-left p-2 w-40">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading ? (
+                        <tr><td className="p-2" colSpan={2}>Loading...</td></tr>
+                      ) : categories.length === 0 ? (
+                        <tr><td className="p-2" colSpan={2}>No categories found</td></tr>
+                      ) : (
+                        categories.map((c) => (
+                          <tr key={c.id} className="border-t border-white/10 hover:bg-white/5">
+                            <td className="p-2 pr-4 cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis" onClick={() => openDetails(c)} title={c.category_name}>{c.category_name}</td>
+                            <td className="p-2 w-40">
+                              <div className="flex items-center gap-2 min-w-[140px]">
+                                <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openEdit(c)} title="Edit">
+                                  <Pencil size={14} />
+                                </button>
+                                <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openDelete(c)} title="Delete">
+                                  <Trash2 size={14} />
+                                </button>
+                                <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openDetails(c)} title="Details">
+                                  <Info size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Pagination controls */}
+            <div className="mt-4 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-white/70 text-sm">
+                <span>Rows per page:</span>
+                <select
+                  className="bg-transparent border border-white/20 rounded px-2 py-1"
+                  value={limit}
+                  onChange={(e) => { const v = parseInt(e.target.value, 10) || 10; setPage(1); setLimit(v) }}
+                >
+                  {[10, 20, 30, 50].map(n => (
+                    <option key={n} value={n} className="bg-[#0f1535]">{n}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-3 text-white/70 text-sm">
+                <button
+                  className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1 || loading}
+                >
+                  Prev
+                </button>
+                <span>
+                  Page {totalPages ? Math.min(page, totalPages) : page} of {totalPages}
+                </span>
+                <button
+                  className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40"
+                  onClick={() => setPage(p => (p < totalPages ? p + 1 : p))}
+                  disabled={page >= totalPages || loading}
+                >
+                  Next
+                </button>
               </div>
             </div>
           </div>
