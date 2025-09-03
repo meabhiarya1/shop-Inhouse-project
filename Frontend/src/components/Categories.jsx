@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Menu, Plus, Pencil, Trash2, Info } from 'lucide-react'
+import { Menu, Plus, Pencil, Trash2, Info, Search } from 'lucide-react'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import Sidebar from './Sidebar.jsx'
@@ -25,6 +25,11 @@ function CategoriesInner() {
   const [activeCategory, setActiveCategory] = useState(null)
   const [formName, setFormName] = useState('')
   const [details, setDetails] = useState({ category: null, products: [] })
+  const [searchTerm, setSearchTerm] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [detailsLoadingId, setDetailsLoadingId] = useState(null)
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` }), [])
 
@@ -33,10 +38,10 @@ function CategoriesInner() {
     try {
       const { data } = await axios.get('/api/categories', {
         headers,
-        params: { page: p, limit: l }
+  // Frontend-only search; do not send q
+  params: { page: p, limit: l }
       })
 
-      console.log(data)
       const list = Array.isArray(data?.data) ? data.data : []
       const meta = data?.pagination || { page: p, limit: l, total: list.length, totalPages: 1 }
 
@@ -62,6 +67,12 @@ function CategoriesInner() {
   }
 
   useEffect(() => { loadCategories(page, limit) }, [page, limit])
+  // Frontend-only search: filter locally from current state
+  const filteredCategories = useMemo(() => {
+    const q = (searchTerm || '').trim().toLowerCase()
+    if (!q) return categories
+    return categories.filter(c => (c?.category_name || '').toLowerCase().includes(q))
+  }, [categories, searchTerm])
 
   const openCreate = () => {
     setFormName('')
@@ -71,13 +82,16 @@ function CategoriesInner() {
   const handleCreate = async (e) => {
     e.preventDefault()
     try {
-      await axios.post('/api/categories', { category_name: formName }, { headers })
+      setCreating(true)
+      await axios.post('/api/categories', { category_name: formName.toLowerCase() }, { headers })
       toast.success('Category created')
       setCreateOpen(false)
       setPage(1)
       loadCategories(1, limit)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to create category')
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -91,12 +105,15 @@ function CategoriesInner() {
     e.preventDefault()
     if (!activeCategory) return
     try {
-      await axios.put(`/api/categories/${activeCategory.id}`, { category_name: formName }, { headers })
+      setSaving(true)
+      await axios.put(`/api/categories/${activeCategory.id}`, { category_name: formName.toLowerCase() }, { headers })
       toast.success('Category updated')
       setEditOpen(false)
       loadCategories(page, limit)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to update category')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -108,17 +125,21 @@ function CategoriesInner() {
   const handleDelete = async () => {
     if (!activeCategory) return
     try {
+      setDeleting(true)
       await axios.delete(`/api/categories/${activeCategory.id}`, { headers })
       toast.success('Category deleted')
       setDeleteOpen(false)
       loadCategories(page, limit)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to delete category')
+    } finally {
+      setDeleting(false)
     }
   }
 
   const openDetails = async (cat) => {
     try {
+      setDetailsLoadingId(cat.id)
       const { data } = await axios.get(`/api/categories/${cat.id}/products`, { headers })
       const payload = data?.data || { category: cat, products: [] }
       setDetails(payload)
@@ -126,6 +147,8 @@ function CategoriesInner() {
     } catch (e) {
       setDetails({ category: cat, products: [] })
       setDetailsOpen(true)
+    } finally {
+      setDetailsLoadingId(null)
     }
   }
 
@@ -160,12 +183,37 @@ function CategoriesInner() {
 
           {/* Content */}
           <div className="p-4 lg:p-8 text-white">
-            <div className="flex items-center justify-between mb-4">
+
+            <div className="flex items-center justify-between mb-4 gap-3">
               <div className="text-white/70 text-sm">Total: {total}</div>
-              <button onClick={openCreate} className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm">
-                <Plus size={16} />
-                <span>Create Category</span>
-              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="relative w-[240px] sm:w-[320px]">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-white/50">
+                    <Search size={16} />
+                  </div>
+                  <input
+                    className="w-full h-10 pl-9 pr-8 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Search categories..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  {searchTerm && (
+                    <button
+                      className="absolute inset-y-0 right-0 pr-2 flex items-center text-white/60 hover:text-white"
+                      onClick={() => setSearchTerm('')}
+                      title="Clear"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <button onClick={openCreate} className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap">
+                  <Plus size={16} />
+                  <span>Create Category</span>
+                </button>
+              </div>
             </div>
 
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] border border-white/10">
@@ -182,22 +230,41 @@ function CategoriesInner() {
                     <tbody>
                       {loading ? (
                         <tr><td className="p-2" colSpan={2}>Loading...</td></tr>
-                      ) : categories.length === 0 ? (
+                      ) : filteredCategories.length === 0 ? (
                         <tr><td className="p-2" colSpan={2}>No categories found</td></tr>
                       ) : (
-                        categories.map((c) => (
+                        filteredCategories.map((c) => (
                           <tr key={c.id} className="border-t border-white/10 hover:bg-white/5">
                             <td className="p-2 pr-4 cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis" onClick={() => openDetails(c)} title={c.category_name}>{c.category_name}</td>
                             <td className="p-2 w-40">
                               <div className="flex items-center gap-2 min-w-[140px]">
-                                <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openEdit(c)} title="Edit">
+                                <button
+                                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
+                                  onClick={() => openEdit(c)}
+                                  title="Edit"
+                                  disabled={creating || saving || deleting || detailsLoadingId === c.id}
+                                >
                                   <Pencil size={14} />
                                 </button>
-                                <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openDelete(c)} title="Delete">
+                                <button
+                                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
+                                  onClick={() => openDelete(c)}
+                                  title="Delete"
+                                  disabled={creating || saving || deleting || detailsLoadingId === c.id}
+                                >
                                   <Trash2 size={14} />
                                 </button>
-                                <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openDetails(c)} title="Details">
-                                  <Info size={14} />
+                                <button
+                                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
+                                  onClick={() => openDetails(c)}
+                                  title="Details"
+                                  disabled={creating || saving || deleting}
+                                >
+                                  {detailsLoadingId === c.id ? (
+                                    <span className="inline-block h-4 w-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Info size={14} />
+                                  )}
                                 </button>
                               </div>
                             </td>
@@ -263,8 +330,15 @@ function CategoriesInner() {
                 <input className="w-full bg:white/10 border border:white/10 rounded p-2 mt-1" value={formName} onChange={(e) => setFormName(e.target.value)} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="px-3 py-2 rounded bg-white/10 hover:bg-white/20" onClick={() => setCreateOpen(false)}>Cancel</button>
-                <button type="submit" className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700">Create</button>
+                <button type="button" className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-60" onClick={() => setCreateOpen(false)} disabled={creating}>Cancel</button>
+                <button type="submit" className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60" disabled={creating}>
+                  {creating ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="inline-block h-4 w-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                      Creating...
+                    </span>
+                  ) : 'Create'}
+                </button>
               </div>
             </form>
           </div>
@@ -285,8 +359,15 @@ function CategoriesInner() {
                 <input className="w-full bg:white/10 border border:white/10 rounded p-2 mt-1" value={formName} onChange={(e) => setFormName(e.target.value)} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="px-3 py-2 rounded bg-white/10 hover:bg-white/20" onClick={() => setEditOpen(false)}>Cancel</button>
-                <button type="submit" className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700">Save</button>
+                <button type="button" className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-60" onClick={() => setEditOpen(false)} disabled={saving}>Cancel</button>
+                <button type="submit" className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60" disabled={saving}>
+                  {saving ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="inline-block h-4 w-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                      Saving...
+                    </span>
+                  ) : 'Save'}
+                </button>
               </div>
             </form>
           </div>
@@ -300,8 +381,15 @@ function CategoriesInner() {
             <h3 className="font-semibold mb-2">Delete Category</h3>
             <p className="text-white/70 mb-4">Are you sure you want to delete this category?</p>
             <div className="flex justify-end gap-2">
-              <button className="px-3 py-2 rounded bg-white/10 hover:bg-white/20" onClick={() => setDeleteOpen(false)}>Cancel</button>
-              <button className="px-3 py-2 rounded bg-red-600 hover:bg-red-700" onClick={handleDelete}>Delete</button>
+              <button className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-60" onClick={() => setDeleteOpen(false)} disabled={deleting}>Cancel</button>
+              <button className="px-3 py-2 rounded bg-red-600 hover:bg-red-700 disabled:opacity-60" onClick={handleDelete} disabled={deleting}>
+                {deleting ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="inline-block h-4 w-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                    Deleting...
+                  </span>
+                ) : 'Delete'}
+              </button>
             </div>
           </div>
         </div>

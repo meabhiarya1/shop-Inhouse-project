@@ -1,4 +1,5 @@
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
@@ -17,15 +18,19 @@ class CategoryController {
         });
       }
 
-      // Pagination: market standard page & limit with sensible defaults and caps
-      const rawPage = parseInt(req.query.page || '1', 10);
-      const rawLimit = parseInt(req.query.limit || '10', 10);
+  // Pagination: market standard page & limit with sensible defaults and caps
+  const rawPage = parseInt(req.query.page || '1', 10);
+  const rawLimit = parseInt(req.query.limit || '10', 10);
       const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
       const limitUncapped = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 10;
       const limit = Math.min(Math.max(limitUncapped, 1), 50); // safety cap
       const offset = (page - 1) * limit;
 
+      // Case-insensitive search: compare LOWER(category_name) LIKE %lower(q)%
+  // No server-side search; frontend filters locally
+  const where = undefined;
       const { count, rows } = await Category.findAndCountAll({
+        where,
         order: [['category_name', 'ASC']],
         limit,
         offset
@@ -36,7 +41,7 @@ class CategoryController {
       res.status(200).json({
         success: true,
         data: rows,
-        pagination: {
+  pagination: {
           page,
           limit,
           total: count,

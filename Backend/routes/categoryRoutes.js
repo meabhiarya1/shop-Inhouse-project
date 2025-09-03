@@ -31,7 +31,7 @@ const paginationValidation = [
     .optional()
     .isInt({ min: 1, max: 50 })
     .withMessage('limit must be an integer between 1 and 50')
-    .toInt()
+    .toInt(),
 ];
 
 router.get('/', paginationValidation, CategoryController.getAllCategories);
