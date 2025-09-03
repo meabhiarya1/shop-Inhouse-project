@@ -235,7 +235,7 @@ function CategoriesInner() {
                       ) : (
                         filteredCategories.map((c) => (
                           <tr key={c.id} className="border-t border-white/10 hover:bg-white/5">
-                            <td className="p-2 pr-4 cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis" onClick={() => openDetails(c)} title={c.category_name}>{c.category_name}</td>
+                            <td className="p-2 pr-4 cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis capitalize" onClick={() => openDetails(c)} title={c.category_name}>{c.category_name}</td>
                             <td className="p-2 w-40">
                               <div className="flex items-center gap-2 min-w-[140px]">
                                 <button
