@@ -184,6 +184,18 @@ function CategoriesInner() {
           {/* Content */}
           <div className="p-4 lg:p-8 text-white">
 
+            {/* Info note about categories scope (compact) */}
+            <div className="mb-3 rounded-lg border border-indigo-400/30 bg-gradient-to-r from-indigo-500/10 via-blue-500/10 to-transparent p-2">
+              <div className="flex items-start gap-2">
+                <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-300">
+                  <Info size={14} />
+                </div>
+                <p className="text-[11px] sm:text-xs leading-snug text-white/90">
+                  <span className="text-indigo-300 font-medium">Note:</span> Categories are global and not tied to any shop. They can be assigned to any product, while products themselves can be associated with shops.
+                </p>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mb-4 gap-3">
               <div className="text-white/70 text-sm">Total: {total}</div>
 
@@ -229,7 +241,20 @@ function CategoriesInner() {
                     </thead>
                     <tbody>
                       {loading ? (
-                        <tr><td className="p-2" colSpan={2}>Loading...</td></tr>
+                        Array.from({ length: limit }).map((_, i) => (
+                          <tr key={`skeleton-${i}`} className="border-t border-white/10">
+                            <td className="p-2 pr-4">
+                              <div className="h-4 w-1/2 sm:w-2/5 bg-white/10 rounded animate-pulse" />
+                            </td>
+                            <td className="p-2 w-40">
+                              <div className="flex items-center gap-2">
+                                <div className="h-6 w-8 bg-white/10 rounded animate-pulse" />
+                                <div className="h-6 w-8 bg-white/10 rounded animate-pulse" />
+                                <div className="h-6 w-8 bg-white/10 rounded animate-pulse" />
+                              </div>
+                            </td>
+                          </tr>
+                        ))
                       ) : filteredCategories.length === 0 ? (
                         <tr><td className="p-2" colSpan={2}>No categories found</td></tr>
                       ) : (
