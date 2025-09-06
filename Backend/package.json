@@ -13,6 +13,9 @@
     "migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",
     "seed:all": "node scripts/seedUsers.js && node scripts/seedShops.js",
     "seed:categories": "node scripts/seedCategories.js",
+    "seed:brands": "node scripts/seedBrands.js",
+    "seed:products": "node scripts/seedProducts.js",
+    "seed:complete": "npm run seed:all && npm run seed:categories && npm run seed:brands && npm run seed:products",
     "db:reset": "node scripts/resetDatabase.js",
     "backup": "node scripts/backupData.js",
     "restore": "node scripts/restoreData.js"
