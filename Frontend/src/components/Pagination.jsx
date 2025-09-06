@@ -52,7 +52,7 @@ const Pagination = ({
   if (totalPages <= 1) {
     return showDetails ? (
       <div className={`flex items-center justify-between text-sm text-white/70 ${className}`}>
-        <div>
+        <div className="hidden sm:block">
           Showing {total} of {total} results
         </div>
       </div>
@@ -61,45 +61,45 @@ const Pagination = ({
 
   return (
     <div className={`flex items-center justify-between text-sm ${className}`}>
-      {/* Results info */}
+      {/* Results info - Hidden on mobile */}
       {showDetails && (
-        <div className="text-white/70">
+        <div className="text-white/70 hidden sm:block">
           Showing {startItem} to {endItem} of {total} results
         </div>
       )}
 
       {/* Pagination controls */}
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1 sm:space-x-2 mx-auto sm:mx-0">
         {/* First page */}
         <button
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+          className="p-1.5 sm:p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white"
           title="First page"
         >
-          <ChevronsLeft size={16} />
+          <ChevronsLeft size={14} className="sm:w-4 sm:h-4" />
         </button>
 
         {/* Previous page */}
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+          className="p-1.5 sm:p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white"
           title="Previous page"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={14} className="sm:w-4 sm:h-4" />
         </button>
 
         {/* Page numbers */}
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-0.5 sm:space-x-1">
           {pageNumbers.map((page, index) => (
             <React.Fragment key={index}>
               {page === '...' ? (
-                <span className="px-3 py-2 text-white/50">...</span>
+                <span className="px-2 sm:px-3 py-1 sm:py-2 text-white/50 text-xs sm:text-sm">...</span>
               ) : (
                 <button
                   onClick={() => onPageChange(page)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                  className={`px-2 sm:px-3 py-1 sm:py-2 rounded-lg text-xs sm:text-sm font-medium ${
                     currentPage === page
                       ? 'bg-indigo-600 text-white'
                       : 'bg-white/10 hover:bg-white/20 text-white'
@@ -116,20 +116,20 @@ const Pagination = ({
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+          className="p-1.5 sm:p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white"
           title="Next page"
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={14} className="sm:w-4 sm:h-4" />
         </button>
 
         {/* Last page */}
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+          className="p-1.5 sm:p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white"
           title="Last page"
         >
-          <ChevronsRight size={16} />
+          <ChevronsRight size={14} className="sm:w-4 sm:h-4" />
         </button>
       </div>
     </div>

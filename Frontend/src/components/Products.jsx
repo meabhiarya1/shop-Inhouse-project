@@ -178,7 +178,22 @@ function ProductsInner() {
   }
 
   const toggleSelected = (id) => {
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    console.log('Toggling selection for ID:', id);
+    console.log('Current selectedIds:', selectedIds);
+    setSelectedIds((prev) => {
+      const isSelected = prev.includes(id);
+      const newSelection = isSelected ? prev.filter(x => x !== id) : [...prev, id];
+      console.log('New selectedIds:', newSelection);
+      return newSelection;
+    });
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === products.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(products.map(p => p.id));
+    }
   }
 
   const handleDeleteMultiple = async () => {
@@ -239,51 +254,88 @@ function ProductsInner() {
               <div className="flex items-center gap-2">
                 <button onClick={openCreate} className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm">
                   <Plus size={16} />
-                  <span>Create Product</span>
+                  <span className="hidden sm:inline">Create Product</span>
                 </button>
-                <button onClick={handleDeleteMultiple} className="inline-flex items-center space-x-2 bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg text-sm">
+                <button 
+                  onClick={handleDeleteMultiple} 
+                  disabled={selectedIds.length === 0}
+                  className={`inline-flex items-center space-x-2 px-3 py-2 rounded-lg text-sm transition-all ${
+                    selectedIds.length > 0 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
                   <Trash2 size={16} />
-                  <span>Delete Selected</span>
+                  <span className="hidden sm:inline">Delete Selected {selectedIds.length > 0 && `(${selectedIds.length})`}</span>
+                  <span className="sm:hidden">{selectedIds.length > 0 && `(${selectedIds.length})`}</span>
                 </button>
               </div>
             </div>
 
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] border border-white/10">
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
+              <div className="overflow-x-auto max-h-[calc(100vh-350px)] overflow-y-auto">
+                <table className="min-w-full text-xs md:text-sm">
                   <thead className="text-white/70">
                     <tr>
-                      <th className="text-left p-2 w-8"></th>
+                      <th className="text-left p-2 w-8">
+                        <button 
+                          onClick={toggleSelectAll}
+                          className={`p-1 rounded-lg border-2 transition-all duration-200 ${
+                            selectedIds.length === products.length && products.length > 0
+                              ? 'bg-indigo-600 border-indigo-500 text-white' 
+                              : 'bg-white/5 border-white/20 hover:bg-white/10 hover:border-white/40'
+                          }`}
+                        >
+                          {selectedIds.length === products.length && products.length > 0 ? (
+                            <CheckSquare size={14} className="text-white" />
+                          ) : selectedIds.length > 0 ? (
+                            <CheckSquare size={14} className="text-indigo-400" />
+                          ) : (
+                            <Square size={14} className="text-white/60" />
+                          )}
+                        </button>
+                      </th>
                       <th className="text-left p-2">Name</th>
-                      <th className="text-left p-2">Brand</th>
-                      <th className="text-left p-2">Shop</th>
-                      <th className="text-left p-2">Category</th>
+                      <th className="text-left p-2 hidden md:table-cell">Brand</th>
+                      <th className="text-left p-2 hidden md:table-cell">Shop</th>
+                      <th className="text-left p-2 hidden md:table-cell">Category</th>
                       <th className="text-right p-2">Qty</th>
                       <th className="text-left p-2">Size (L×W×T)</th>
-                      <th className="text-left p-2">Weight</th>
+                      <th className="text-left p-2 hidden sm:table-cell">Weight</th>
                       <th className="text-left p-2">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td className="p-2" colSpan={9}>Loading...</td></tr>
+                      <tr><td className="p-2 text-xs md:text-sm" colSpan={9}>Loading...</td></tr>
                     ) : products.length === 0 ? (
-                      <tr><td className="p-2" colSpan={9}>No products found</td></tr>
+                      <tr><td className="p-2 text-xs md:text-sm" colSpan={9}>No products found</td></tr>
                     ) : (
                       products.map((p) => (
                         <tr key={p.id} className="border-t border-white/10 hover:bg-white/5">
                           <td className="p-2">
-                            <button onClick={() => toggleSelected(p.id)} className="p-1 rounded bg-white/5 hover:bg-white/10">
-                              {selectedIds.includes(p.id) ? <CheckSquare size={16} /> : <Square size={16} />}
+                            <button 
+                              onClick={() => toggleSelected(p.id)} 
+                              className={`p-1 rounded-lg border-2 transition-all duration-200 ${
+                                selectedIds.includes(p.id) 
+                                  ? 'bg-indigo-600 border-indigo-500 text-white' 
+                                  : 'bg-white/5 border-white/20 hover:bg-white/10 hover:border-white/40'
+                              }`}
+                            >
+                              {selectedIds.includes(p.id) ? (
+                                <CheckSquare size={14} className="text-white" />
+                              ) : (
+                                <Square size={14} className="text-white/60" />
+                              )}
                             </button>
                           </td>
-                          <td className="p-2">{p.product_name}</td>
-                          <td className="p-2">{p?.brand?.brand_name || '-'}</td>
-                          <td className="p-2">{p?.shop?.shop_name || '-'}</td>
-                          <td className="p-2">{p?.category?.category_name || '-'}</td>
-                          <td className="p-2 text-right">{p.quantity}</td>
-                          <td className="p-2">{[p.length, p.width, p.thickness].filter(v => v != null && v !== '').join(' × ')}</td>
-                          <td className="p-2">{p.weight ?? '-'}</td>
+                          <td className="p-2 text-xs md:text-sm">{p.product_name}</td>
+                          <td className="p-2 text-xs md:text-sm hidden md:table-cell">{p?.brand?.brand_name || '-'}</td>
+                          <td className="p-2 text-xs md:text-sm hidden md:table-cell">{p?.shop?.shop_name || '-'}</td>
+                          <td className="p-2 text-xs md:text-sm hidden md:table-cell">{p?.category?.category_name || '-'}</td>
+                          <td className="p-2 text-right text-xs md:text-sm">{p.quantity}</td>
+                          <td className="p-2 text-xs md:text-sm">{[p.length, p.width, p.thickness].filter(v => v != null && v !== '').join(' × ')}</td>
+                          <td className="p-2 text-xs md:text-sm hidden sm:table-cell">{p.weight ?? '-'}</td>
                           <td className="p-2">
                             <div className="flex items-center gap-2">
                               <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => openEdit(p)} title="Edit">
