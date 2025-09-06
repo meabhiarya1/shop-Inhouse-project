@@ -18,22 +18,23 @@ class CategoryController {
         });
       }
 
-  // Pagination: market standard page & limit with sensible defaults and caps
-  const rawPage = parseInt(req.query.page || '1', 10);
-  const rawLimit = parseInt(req.query.limit || '10', 10);
+      // Pagination: market standard page & limit with sensible defaults and caps
+      const rawPage = parseInt(req.query.page || '1', 10);
+      const rawLimit = parseInt(req.query.limit || '10', 10);
       const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
       const limitUncapped = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 10;
-      const limit = Math.min(Math.max(limitUncapped, 1), 50); // safety cap
+      const limit = Math.min(Math.max(limitUncapped, 1), 100); // increased cap to match products
       const offset = (page - 1) * limit;
 
       // Case-insensitive search: compare LOWER(category_name) LIKE %lower(q)%
-  // No server-side search; frontend filters locally
-  const where = undefined;
+      // No server-side search; frontend filters locally
+      const where = undefined;
       const { count, rows } = await Category.findAndCountAll({
         where,
         order: [['category_name', 'ASC']],
         limit,
-        offset
+        offset,
+        distinct: true // Important for accurate count
       });
 
       const totalPages = Math.max(Math.ceil(count / limit), 1);
@@ -41,8 +42,8 @@ class CategoryController {
       res.status(200).json({
         success: true,
         data: rows,
-  pagination: {
-          page,
+        pagination: {
+          currentPage: page, // Changed from 'page' to 'currentPage' to match products
           limit,
           total: count,
           totalPages,

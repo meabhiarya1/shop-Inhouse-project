@@ -3,6 +3,7 @@ import { Menu, Plus, Pencil, Trash2, Info, CheckSquare, Square } from 'lucide-re
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import Sidebar from './Sidebar.jsx'
+import Pagination from './Pagination.jsx'
 import { DashboardProvider, useDashboard } from '../context/DashboardContext.jsx'
 import PeriodSelect from './navbar/PeriodSelect.jsx'
 import ShopDropdown from './navbar/ShopDropdown.jsx'
@@ -13,6 +14,17 @@ function ProductsInner() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPrevPage: false
+  })
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -36,21 +48,45 @@ function ProductsInner() {
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` }), [])
 
-  const loadProducts = async () => {
+  const loadProducts = async (page = 1) => {
     setLoading(true)
     try {
-      const params = { period }
+      const params = { 
+        period,
+        page,
+        limit: 10
+      }
       // Prefer shop-specific endpoint for clarity; supports 'all'
       const url = `/api/products/shop/${selectedShop || 'all'}`
       const { data } = await axios.get(url, { params, headers })
-      const list = Array.isArray(data?.data?.products)
+      
+      // Handle different response structures
+      const productsList = Array.isArray(data?.data?.products)
         ? data.data.products
         : Array.isArray(data?.data)
         ? data.data
         : Array.isArray(data)
         ? data
         : []
-      setProducts(list)
+      
+      setProducts(productsList)
+      
+      // Set pagination data
+      if (data?.pagination) {
+        setPagination(data.pagination)
+        setCurrentPage(data.pagination.currentPage)
+      } else {
+        // Fallback for legacy response
+        setPagination({
+          currentPage: page,
+          limit: 10,
+          total: data?.data?.totalProducts || productsList.length,
+          totalPages: Math.ceil((data?.data?.totalProducts || productsList.length) / 10),
+          hasNextPage: false,
+          hasPrevPage: false
+        })
+        setCurrentPage(page)
+      }
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to load products')
     } finally {
@@ -58,7 +94,18 @@ function ProductsInner() {
     }
   }
 
-  useEffect(() => { if (selectedShop) loadProducts() }, [selectedShop, period])
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+    loadProducts(page)
+    setSelectedIds([]) // Clear selections when changing pages
+  }
+
+  useEffect(() => { 
+    if (selectedShop) {
+      setCurrentPage(1) // Reset to first page when shop/period changes
+      loadProducts(1) 
+    }
+  }, [selectedShop, period])
 
   const openCreate = () => {
     setForm({
@@ -85,7 +132,7 @@ function ProductsInner() {
       await axios.post('/api/products', payload, { headers })
       toast.success('Product created')
       setCreateOpen(false)
-      loadProducts()
+      loadProducts(currentPage)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to create product')
     }
@@ -124,7 +171,7 @@ function ProductsInner() {
       await axios.put(`/api/products/${activeProduct.id}`, payload, { headers })
       toast.success('Product updated')
       setEditOpen(false)
-      loadProducts()
+      loadProducts(currentPage)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to update product')
     }
@@ -140,7 +187,11 @@ function ProductsInner() {
       await axios.delete('/api/products/delete/multiple', { data: { productIds: selectedIds }, headers })
       toast.success('Deleted selected products')
       setSelectedIds([])
-      loadProducts()
+      // If we deleted all items on current page and it's not page 1, go to previous page
+      const remainingItems = pagination.total - selectedIds.length
+      const newTotalPages = Math.ceil(remainingItems / pagination.limit)
+      const targetPage = currentPage > newTotalPages ? Math.max(1, newTotalPages) : currentPage
+      loadProducts(targetPage)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to delete products')
     }
@@ -177,7 +228,14 @@ function ProductsInner() {
           {/* Content */}
           <div className="p-4 lg:p-8 text-white">
             <div className="flex items-center justify-between mb-4">
-              <div className="text-white/70 text-sm">Total: {products.length}</div>
+              <div className="text-white/70 text-sm">
+                Total: {pagination.total} products
+                {pagination.total > 0 && (
+                  <span className="ml-2">
+                    (Page {pagination.currentPage} of {pagination.totalPages})
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <button onClick={openCreate} className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm">
                   <Plus size={16} />
@@ -242,6 +300,20 @@ function ProductsInner() {
                   </tbody>
                 </table>
               </div>
+              
+              {/* Pagination */}
+              {!loading && pagination.totalPages > 1 && (
+                <div className="mt-6 pt-4 border-t border-white/10">
+                  <Pagination
+                    currentPage={pagination.currentPage}
+                    totalPages={pagination.totalPages}
+                    total={pagination.total}
+                    limit={pagination.limit}
+                    onPageChange={handlePageChange}
+                    className="text-white"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

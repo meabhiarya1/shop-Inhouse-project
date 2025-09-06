@@ -10,7 +10,12 @@ class ProductController {
   // Get all products
   static async getAllProducts(req, res) {
     try {
-      const { period, start_date, end_date, shop_id } = req.query;
+      const { period, start_date, end_date, shop_id, page = 1, limit = 10 } = req.query;
+
+      // Pagination parameters
+      const pageNum = Math.max(1, parseInt(page, 10));
+      const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10))); // Max 100 per page
+      const offset = (pageNum - 1) * limitNum;
 
       // Build where clause based on optional filters
       const where = {};
@@ -54,7 +59,8 @@ class ProductController {
         where.createdAt = { [Op.between]: [rangeStart, rangeEnd] };
       }
 
-      const products = await Product.findAll({
+      // Get products with pagination and total count
+      const { count, rows: products } = await Product.findAndCountAll({
         where,
         include: [
           {
@@ -73,13 +79,28 @@ class ProductController {
             attributes: ['id', 'category_name']
           }
         ],
-        order: [['product_name', 'ASC']]
+        order: [['product_name', 'ASC']],
+        limit: limitNum,
+        offset: offset,
+        distinct: true // Important for accurate count with includes
       });
+
+      // Calculate pagination metadata
+      const totalPages = Math.ceil(count / limitNum);
+      const hasNextPage = pageNum < totalPages;
+      const hasPrevPage = pageNum > 1;
 
       res.status(200).json({
         success: true,
         data: products,
-        total: products.length
+        pagination: {
+          currentPage: pageNum,
+          limit: limitNum,
+          total: count,
+          totalPages: totalPages,
+          hasNextPage: hasNextPage,
+          hasPrevPage: hasPrevPage
+        }
       });
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -139,7 +160,12 @@ class ProductController {
   static async getAllProductsByShopId(req, res) {
     try {
       const { shopId } = req.params;
-      const { period, start_date, end_date } = req.query;
+      const { period, start_date, end_date, page = 1, limit = 10 } = req.query;
+
+      // Pagination parameters
+      const pageNum = Math.max(1, parseInt(page, 10));
+      const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10))); // Max 100 per page
+      const offset = (pageNum - 1) * limitNum;
 
       // Build where clause
       const where = {};
@@ -192,7 +218,8 @@ class ProductController {
         where.createdAt = { [Op.between]: [rangeStart, rangeEnd] };
       }
 
-      const products = await Product.findAll({
+      // Get products with pagination and total count
+      const { count, rows: products } = await Product.findAndCountAll({
         where,
         include: [
           {
@@ -211,15 +238,31 @@ class ProductController {
             attributes: ['id', 'category_name']
           }
         ],
-        order: [['product_name', 'ASC']]
+        order: [['product_name', 'ASC']],
+        limit: limitNum,
+        offset: offset,
+        distinct: true // Important for accurate count with includes
       });
+
+      // Calculate pagination metadata
+      const totalPages = Math.ceil(count / limitNum);
+      const hasNextPage = pageNum < totalPages;
+      const hasPrevPage = pageNum > 1;
 
       res.status(200).json({
         success: true,
         data: {
           shop: shop,
           products: products,
-          totalProducts: products.length
+          totalProducts: count
+        },
+        pagination: {
+          currentPage: pageNum,
+          limit: limitNum,
+          total: count,
+          totalPages: totalPages,
+          hasNextPage: hasNextPage,
+          hasPrevPage: hasPrevPage
         }
       });
     } catch (error) {

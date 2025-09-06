@@ -3,6 +3,7 @@ import { Menu, Plus, Pencil, Trash2, Info, Search } from 'lucide-react'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import Sidebar from './Sidebar.jsx'
+import Pagination from './Pagination.jsx'
 import { DashboardProvider } from '../context/DashboardContext.jsx'
 import PeriodSelect from './navbar/PeriodSelect.jsx'
 import ShopDropdown from './navbar/ShopDropdown.jsx'
@@ -12,10 +13,17 @@ function CategoriesInner() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
-  const [page, setPage] = useState(1)
-  const [limit, setLimit] = useState(10)
-  const [total, setTotal] = useState(0)
-  const [totalPages, setTotalPages] = useState(1)
+
+  // Pagination state - unified structure
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPrevPage: false
+  })
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -33,32 +41,36 @@ function CategoriesInner() {
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` }), [])
 
-  const loadCategories = async (p = page, l = limit) => {
+  const loadCategories = async (page = 1) => {
     setLoading(true)
     try {
       const { data } = await axios.get('/api/categories', {
         headers,
-  // Frontend-only search; do not send q
-  params: { page: p, limit: l }
+        // Frontend-only search; do not send q
+        params: { page, limit: 10 }
       })
 
       const list = Array.isArray(data?.data) ? data.data : []
-      const meta = data?.pagination || { page: p, limit: l, total: list.length, totalPages: 1 }
+      const paginationData = data?.pagination || {
+        currentPage: page,
+        limit: 10,
+        total: list.length,
+        totalPages: Math.ceil(list.length / 10),
+        hasNextPage: false,
+        hasPrevPage: false
+      }
 
       // If current page exceeded after deletions, jump back to last page
-      if (p > 1 && list.length === 0 && meta.totalPages && meta.totalPages < p) {
-        setPage(meta.totalPages)
-        setTotal(meta.total)
-        setTotalPages(meta.totalPages || 1)
+      if (page > 1 && list.length === 0 && paginationData.totalPages && paginationData.totalPages < page) {
+        setCurrentPage(paginationData.totalPages)
+        setPagination(prev => ({ ...prev, currentPage: paginationData.totalPages }))
         setLoading(false)
         return
       }
 
       setCategories(list)
-      setPage(meta.page || p)
-      setLimit(meta.limit || l)
-      setTotal(meta.total ?? list.length)
-      setTotalPages(meta.totalPages || 1)
+      setPagination(paginationData)
+      setCurrentPage(paginationData.currentPage)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to load categories')
     } finally {
@@ -66,7 +78,12 @@ function CategoriesInner() {
     }
   }
 
-  useEffect(() => { loadCategories(page, limit) }, [page, limit])
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+    loadCategories(page)
+  }
+
+  useEffect(() => { loadCategories(currentPage) }, [])
   // Frontend-only search: filter locally from current state
   const filteredCategories = useMemo(() => {
     const q = (searchTerm || '').trim().toLowerCase()
@@ -86,8 +103,8 @@ function CategoriesInner() {
       await axios.post('/api/categories', { category_name: formName.toLowerCase() }, { headers })
       toast.success('Category created')
       setCreateOpen(false)
-      setPage(1)
-      loadCategories(1, limit)
+      setCurrentPage(1)
+      loadCategories(1)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to create category')
     } finally {
@@ -109,7 +126,7 @@ function CategoriesInner() {
       await axios.put(`/api/categories/${activeCategory.id}`, { category_name: formName.toLowerCase() }, { headers })
       toast.success('Category updated')
       setEditOpen(false)
-      loadCategories(page, limit)
+      loadCategories(currentPage)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to update category')
     } finally {
@@ -129,7 +146,11 @@ function CategoriesInner() {
       await axios.delete(`/api/categories/${activeCategory.id}`, { headers })
       toast.success('Category deleted')
       setDeleteOpen(false)
-      loadCategories(page, limit)
+      // If we deleted the last item on current page and it's not page 1, go to previous page
+      const remainingItems = pagination.total - 1
+      const newTotalPages = Math.ceil(remainingItems / pagination.limit)
+      const targetPage = currentPage > newTotalPages ? Math.max(1, newTotalPages) : currentPage
+      loadCategories(targetPage)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to delete category')
     } finally {
@@ -197,7 +218,14 @@ function CategoriesInner() {
             </div>
 
             <div className="flex items-center justify-between mb-4 gap-3">
-              <div className="text-white/70 text-sm">Total: {total}</div>
+              <div className="text-white/70 text-sm">
+                Total: {pagination.total} categories
+                {pagination.total > 0 && (
+                  <span className="ml-2">
+                    (Page {pagination.currentPage} of {pagination.totalPages})
+                  </span>
+                )}
+              </div>
 
               <div className="flex items-center gap-3">
                 <div className="relative w-[240px] sm:w-[320px]">
@@ -241,7 +269,7 @@ function CategoriesInner() {
                     </thead>
                     <tbody>
                       {loading ? (
-                        Array.from({ length: limit }).map((_, i) => (
+                        Array.from({ length: pagination.limit }).map((_, i) => (
                           <tr key={`skeleton-${i}`} className="border-t border-white/10">
                             <td className="p-2 pr-4">
                               <div className="h-4 w-1/2 sm:w-2/5 bg-white/10 rounded animate-pulse" />
@@ -300,42 +328,20 @@ function CategoriesInner() {
                   </table>
                 </div>
               </div>
-            </div>
-
-            {/* Pagination controls */}
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white/70 text-sm">
-                <span>Rows per page:</span>
-                <select
-                  className="bg-transparent border border-white/20 rounded px-2 py-1"
-                  value={limit}
-                  onChange={(e) => { const v = parseInt(e.target.value, 10) || 10; setPage(1); setLimit(v) }}
-                >
-                  {[10, 20, 30, 50].map(n => (
-                    <option key={n} value={n} className="bg-[#0f1535]">{n}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3 text-white/70 text-sm">
-                <button
-                  className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40"
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page <= 1 || loading}
-                >
-                  Prev
-                </button>
-                <span>
-                  Page {totalPages ? Math.min(page, totalPages) : page} of {totalPages}
-                </span>
-                <button
-                  className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40"
-                  onClick={() => setPage(p => (p < totalPages ? p + 1 : p))}
-                  disabled={page >= totalPages || loading}
-                >
-                  Next
-                </button>
-              </div>
+              
+              {/* Pagination */}
+              {!loading && pagination.totalPages > 1 && (
+                <div className="mt-6 pt-4 border-t border-white/10">
+                  <Pagination
+                    currentPage={pagination.currentPage}
+                    totalPages={pagination.totalPages}
+                    total={pagination.total}
+                    limit={pagination.limit}
+                    onPageChange={handlePageChange}
+                    className="text-white"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
