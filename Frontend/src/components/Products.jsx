@@ -13,6 +13,8 @@ function ProductsInner() {
   const { selectedShop, period, shops } = useDashboard()
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [products, setProducts] = useState([])
+  const [allProducts, setAllProducts] = useState([]) // Store all fetched products
+  const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
 
   // Pagination state
@@ -30,6 +32,8 @@ function ProductsInner() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
 
   const [activeProduct, setActiveProduct] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
@@ -69,23 +73,32 @@ function ProductsInner() {
         ? data
         : []
       
+      // Always store all products for page 1 for search capabilities
+      if (page === 1) {
+        setAllProducts(productsList)
+      }
+      
+      // Always show the loaded products (no search filtering here)
       setProducts(productsList)
       
-      // Set pagination data
+      // Set pagination data - always use server data when not searching
       if (data?.pagination) {
-        setPagination(data.pagination)
-        setCurrentPage(data.pagination.currentPage)
+        // Use server pagination for normal browsing
+        setPagination(data.pagination);
+        setCurrentPage(data.pagination.currentPage);
       } else {
         // Fallback for legacy response
+        const totalProducts = data?.data?.totalProducts || productsList.length;
+        const totalPages = Math.ceil(totalProducts / 10);
         setPagination({
           currentPage: page,
           limit: 10,
-          total: data?.data?.totalProducts || productsList.length,
-          totalPages: Math.ceil((data?.data?.totalProducts || productsList.length) / 10),
-          hasNextPage: false,
-          hasPrevPage: false
-        })
-        setCurrentPage(page)
+          total: totalProducts,
+          totalPages: totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        });
+        setCurrentPage(page);
       }
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to load products')
@@ -96,7 +109,19 @@ function ProductsInner() {
 
   const handlePageChange = (page) => {
     setCurrentPage(page)
-    loadProducts(page)
+    
+    // If we have a search term active, we're doing client-side pagination
+    if (searchTerm) {
+      // No need to reload from server, just update the current page
+      setPagination(prev => ({
+        ...prev,
+        currentPage: page,
+      }));
+    } else {
+      // Normal server-side pagination
+      loadProducts(page)
+    }
+    
     setSelectedIds([]) // Clear selections when changing pages
   }
 
@@ -117,6 +142,7 @@ function ProductsInner() {
 
   const handleCreate = async (e) => {
     e.preventDefault()
+    setCreateLoading(true)
     try {
       const payload = {
         ...form,
@@ -135,6 +161,8 @@ function ProductsInner() {
       loadProducts(currentPage)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to create product')
+    } finally {
+      setCreateLoading(false)
     }
   }
 
@@ -156,6 +184,7 @@ function ProductsInner() {
 
   const handleEdit = async (e) => {
     e.preventDefault()
+    setEditLoading(true)
     try {
       const payload = {
         ...form,
@@ -174,6 +203,8 @@ function ProductsInner() {
       loadProducts(currentPage)
     } catch (e) {
       toast.error(e?.response?.data?.message || e.message || 'Failed to update product')
+    } finally {
+      setEditLoading(false)
     }
   }
 
@@ -193,6 +224,68 @@ function ProductsInner() {
       setSelectedIds([]);
     } else {
       setSelectedIds(products.map(p => p.id));
+    }
+  }
+  
+  // Function to filter products based on search term
+  const filterProducts = (productsToFilter, term) => {
+    if (!term) return productsToFilter;
+    
+    // Convert search term to lowercase for case-insensitive matching
+    const searchLower = term.toLowerCase().trim();
+    
+    return productsToFilter.filter(p => {
+      // Helper function to safely check if a value contains the search term
+      const containsSearch = (value) => {
+        if (value === undefined || value === null) return false;
+        return String(value).toLowerCase().includes(searchLower);
+      };
+      
+      // Check all relevant fields
+      return (
+        containsSearch(p.product_name) ||
+        containsSearch(p.brand?.brand_name) || 
+        containsSearch(p.brand_id) ||
+        containsSearch(p.shop?.shop_name) || 
+        containsSearch(p.shop_id) ||
+        containsSearch(p.category?.category_name) || 
+        containsSearch(p.category_id) ||
+        containsSearch(p.quantity) ||
+        containsSearch(p.length) ||
+        containsSearch(p.width) ||
+        containsSearch(p.thickness) ||
+        containsSearch(p.weight)
+      );
+    });
+  }
+  
+  // Handle search input change
+  const handleSearch = (e) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    
+    if (term && term.trim()) {
+      // Apply filter to all products when searching
+      const filtered = filterProducts(allProducts, term);
+      setProducts(filtered);
+      
+      // Update pagination but keep pagination UI visible
+      setPagination(prev => {
+        const totalPages = Math.max(1, Math.ceil(filtered.length / prev.limit));
+        return {
+          ...prev,
+          currentPage: 1,
+          total: filtered.length,
+          totalPages: totalPages,
+          hasNextPage: filtered.length > prev.limit,
+          hasPrevPage: false
+        };
+      });
+      setCurrentPage(1);
+    } else {
+      // When search is cleared (empty or just spaces), reload current page from server
+      setSearchTerm(''); // Ensure it's completely empty
+      loadProducts(currentPage);
     }
   }
 
@@ -242,33 +335,68 @@ function ProductsInner() {
 
           {/* Content */}
           <div className="p-4 lg:p-8 text-white">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-white/70 text-sm">
+            <div className="mb-4">
+              <div className="flex items-center justify-between gap-3">
+                {/* Left side - Search bar */}
+                <div className="relative w-full md:w-64 lg:w-72 flex items-center">
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchTerm}
+                    onChange={handleSearch}
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {searchTerm && (
+                    <div className="absolute right-0 inset-y-0 flex items-center pr-3">
+                      <button 
+                        onClick={() => {
+                          setSearchTerm('');
+                          loadProducts(currentPage);
+                        }}
+                        className="text-white/60 hover:text-white"
+                        aria-label="Clear search"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Right side - Action buttons */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button onClick={openCreate} className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap">
+                    <Plus size={16} />
+                    <span className="hidden sm:inline">Create Product</span>
+                  </button>
+                  <button 
+                    onClick={handleDeleteMultiple} 
+                    disabled={selectedIds.length === 0}
+                    className={`inline-flex items-center space-x-2 px-3 py-2 rounded-lg text-sm transition-all whitespace-nowrap ${
+                      selectedIds.length > 0 
+                        ? 'bg-red-600 hover:bg-red-700 text-white' 
+                        : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Trash2 size={16} />
+                    <span className="hidden sm:inline">Delete Selected {selectedIds.length > 0 && `(${selectedIds.length})`}</span>
+                    <span className="sm:hidden">{selectedIds.length > 0 && `(${selectedIds.length})`}</span>
+                  </button>
+                </div>
+              </div>
+              
+              {/* Total count below search */}
+              <div className="text-white/70 text-sm mt-2">
                 Total: {pagination.total} products
                 {pagination.total > 0 && (
                   <span className="ml-2">
                     (Page {pagination.currentPage} of {pagination.totalPages})
                   </span>
                 )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={openCreate} className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm">
-                  <Plus size={16} />
-                  <span className="hidden sm:inline">Create Product</span>
-                </button>
-                <button 
-                  onClick={handleDeleteMultiple} 
-                  disabled={selectedIds.length === 0}
-                  className={`inline-flex items-center space-x-2 px-3 py-2 rounded-lg text-sm transition-all ${
-                    selectedIds.length > 0 
-                      ? 'bg-red-600 hover:bg-red-700 text-white' 
-                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  <Trash2 size={16} />
-                  <span className="hidden sm:inline">Delete Selected {selectedIds.length > 0 && `(${selectedIds.length})`}</span>
-                  <span className="sm:hidden">{selectedIds.length > 0 && `(${selectedIds.length})`}</span>
-                </button>
+                {searchTerm && (
+                  <span className="ml-2 text-indigo-400">
+                    (Filtered results for "{searchTerm}")
+                  </span>
+                )}
               </div>
             </div>
 
@@ -353,12 +481,12 @@ function ProductsInner() {
                 </table>
               </div>
               
-              {/* Pagination */}
-              {!loading && pagination.totalPages > 1 && (
+              {/* Pagination - Always show if not loading */}
+              {!loading && (
                 <div className="mt-6 pt-4 border-t border-white/10">
                   <Pagination
                     currentPage={pagination.currentPage}
-                    totalPages={pagination.totalPages}
+                    totalPages={Math.max(1, pagination.totalPages)}
                     total={pagination.total}
                     limit={pagination.limit}
                     onPageChange={handlePageChange}
@@ -374,10 +502,26 @@ function ProductsInner() {
       {/* Create Modal */}
       {createOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
-          <div className="w-full max-w-lg bg-[#0f1535] text-white rounded-2xl border border-white/10 p-4">
+          <div className="w-full max-w-lg bg-[#0f1535] text-white rounded-2xl border border-white/10 p-4 relative">
+            {/* Loading Overlay */}
+            {createLoading && (
+              <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center z-10">
+                <div className="flex items-center space-x-3 bg-[#0f1535] px-4 py-3 rounded-lg border border-white/10">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span className="text-sm">Creating product...</span>
+                </div>
+              </div>
+            )}
+            
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold">Create Product</h3>
-              <button className="text-white/60" onClick={() => setCreateOpen(false)}>✕</button>
+              <button 
+                className="text-white/60" 
+                onClick={() => setCreateOpen(false)}
+                disabled={createLoading}
+              >
+                ✕
+              </button>
             </div>
             <form onSubmit={handleCreate} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -422,8 +566,24 @@ function ProductsInner() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="px-3 py-2 rounded bg-white/10 hover:bg-white/20" onClick={() => setCreateOpen(false)}>Cancel</button>
-                <button type="submit" className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700">Create</button>
+                <button 
+                  type="button" 
+                  className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50" 
+                  onClick={() => setCreateOpen(false)}
+                  disabled={createLoading}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  disabled={createLoading}
+                >
+                  {createLoading && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  )}
+                  <span>{createLoading ? 'Creating...' : 'Create'}</span>
+                </button>
               </div>
             </form>
           </div>
@@ -433,10 +593,26 @@ function ProductsInner() {
       {/* Edit Modal */}
       {editOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
-          <div className="w-full max-w-lg bg-[#0f1535] text-white rounded-2xl border border-white/10 p-4">
+          <div className="w-full max-w-lg bg-[#0f1535] text-white rounded-2xl border border-white/10 p-4 relative">
+            {/* Loading Overlay */}
+            {editLoading && (
+              <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center z-10">
+                <div className="flex items-center space-x-3 bg-[#0f1535] px-4 py-3 rounded-lg border border-white/10">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span className="text-sm">Updating product...</span>
+                </div>
+              </div>
+            )}
+            
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold">Edit Product</h3>
-              <button className="text-white/60" onClick={() => setEditOpen(false)}>✕</button>
+              <button 
+                className="text-white/60" 
+                onClick={() => setEditOpen(false)}
+                disabled={editLoading}
+              >
+                ✕
+              </button>
             </div>
             <form onSubmit={handleEdit} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -481,8 +657,24 @@ function ProductsInner() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="px-3 py-2 rounded bg-white/10 hover:bg-white/20" onClick={() => setEditOpen(false)}>Cancel</button>
-                <button type="submit" className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700">Save</button>
+                <button 
+                  type="button" 
+                  className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50" 
+                  onClick={() => setEditOpen(false)}
+                  disabled={editLoading}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  disabled={editLoading}
+                >
+                  {editLoading && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  )}
+                  <span>{editLoading ? 'Updating...' : 'Update'}</span>
+                </button>
               </div>
             </form>
           </div>
