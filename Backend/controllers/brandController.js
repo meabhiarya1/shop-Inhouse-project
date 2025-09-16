@@ -12,8 +12,6 @@ class BrandController {
         order: [["brand_name", "ASC"]],
       });
 
-      console.log(brands);
-
       res.status(200).json({
         success: true,
         data: brands,

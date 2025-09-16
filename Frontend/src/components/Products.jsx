@@ -169,8 +169,6 @@ function ProductsInner() {
     }
   }, [headers]);
 
-  console.log(brands);
-
   const loadProducts = useCallback(
     async (page = 1) => {
       setLoading(true);
