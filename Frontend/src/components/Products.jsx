@@ -107,12 +107,102 @@ function BrandDropdown({
   );
 }
 
+// CategoryDropdown Component
+function CategoryDropdown({
+  value,
+  onChange,
+  placeholder = "Select or type category name",
+  categories = [],
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredCategories, setFilteredCategories] = useState([]);
+
+  // Filter categories based on search term
+  useEffect(() => {
+    if (searchTerm.trim() === "") {
+      setFilteredCategories(categories);
+    } else {
+      const filtered = categories.filter((category) =>
+        category.category_name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredCategories(filtered);
+    }
+  }, [searchTerm, categories]);
+
+  // Initialize filtered categories when categories are loaded
+  useEffect(() => {
+    setFilteredCategories(categories);
+  }, [categories]);
+
+  const handleInputChange = (e) => {
+    const newValue = e.target.value;
+    setSearchTerm(newValue);
+    onChange(newValue); // Allow typing new category names
+    setIsOpen(true);
+  };
+
+  const handleCategorySelect = (categoryName) => {
+    setSearchTerm(categoryName);
+    onChange(categoryName);
+    setIsOpen(false);
+  };
+
+  const handleFocus = () => {
+    setIsOpen(true);
+    setSearchTerm(value);
+  };
+
+  const handleBlur = () => {
+    // Delay closing to allow for clicks on dropdown items
+    setTimeout(() => setIsOpen(false), 200);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+        value={value}
+        onChange={handleInputChange}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-[#0f1535] border border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filteredCategories.length > 0 ? (
+            filteredCategories.map((category) => (
+              <div
+                key={category.id}
+                className="px-3 py-2 hover:bg-white/10 cursor-pointer text-sm"
+                onClick={() => handleCategorySelect(category.category_name)}
+              >
+                {category.category_name}
+              </div>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-white/60 text-sm">
+              {searchTerm.trim()
+                ? "No categories found"
+                : "No categories available"}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProductsInner() {
   const { selectedShop, period, shops } = useDashboard();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]); // Store all fetched products
   const [brands, setBrands] = useState([]); // Store all brands
+  const [categories, setCategories] = useState([]); // Store all categories
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -166,6 +256,20 @@ function ProductsInner() {
     } catch (error) {
       console.error("Error loading brands:", error);
       // Don't show error toast for brands as it's not critical
+    }
+  }, [headers]);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const { data } = await axios.get("/api/categories/dropdown", {
+        headers,
+      });
+
+      const categoriesList = Array.isArray(data?.data) ? data.data : [];
+      setCategories(categoriesList);
+    } catch (error) {
+      console.error("Error loading categories:", error);
+      // Don't show error toast for categories as it's not critical
     }
   }, [headers]);
 
@@ -254,7 +358,8 @@ function ProductsInner() {
       loadProducts(1);
     }
     loadBrands(); // Load brands on component mount
-  }, [selectedShop, period, loadProducts, loadBrands]);
+    loadCategories(); // Load categories on component mount
+  }, [selectedShop, period, loadProducts, loadBrands, loadCategories]);
 
   const openCreate = () => {
     setForm({
@@ -787,13 +892,13 @@ function ProductsInner() {
                 </div>
                 <div>
                   <label className="text-xs text-white/60">Category Name</label>
-                  <input
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                  <CategoryDropdown
                     value={form.category_name}
-                    onChange={(e) =>
-                      setForm({ ...form, category_name: e.target.value })
+                    onChange={(value) =>
+                      setForm({ ...form, category_name: value })
                     }
-                    placeholder="Enter category name"
+                    placeholder="Select or type category name"
+                    categories={categories}
                   />
                 </div>
                 <div>
@@ -947,13 +1052,13 @@ function ProductsInner() {
                 </div>
                 <div>
                   <label className="text-xs text-white/60">Category Name</label>
-                  <input
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                  <CategoryDropdown
                     value={form.category_name}
-                    onChange={(e) =>
-                      setForm({ ...form, category_name: e.target.value })
+                    onChange={(value) =>
+                      setForm({ ...form, category_name: value })
                     }
-                    placeholder="Enter category name"
+                    placeholder="Select or type category name"
+                    categories={categories}
                   />
                 </div>
                 <div>
