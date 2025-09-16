@@ -1,64 +1,82 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
-import { useAuth } from './AuthContext.jsx'
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import axios from "axios";
+import { useAuth } from "./AuthContext.jsx";
 
-const DashboardContext = createContext(null)
+const DashboardContext = createContext(null);
 
 export function DashboardProvider({ children }) {
-  const { user, logout } = useAuth()
+  const { user, logout } = useAuth();
 
-  const [shops, setShops] = useState([])
-  const [selectedShop, setSelectedShop] = useState('all')
-  const [period, setPeriod] = useState('today')
-  const [avatarOpen, setAvatarOpen] = useState(false)
+  const [shops, setShops] = useState([]);
+  const [selectedShop, setSelectedShop] = useState("all");
+  const [period, setPeriod] = useState("lifetime");
+  const [avatarOpen, setAvatarOpen] = useState(false);
 
   // Load shops on mount / when user changes
   useEffect(() => {
-    let ignore = false
+    let ignore = false;
     async function loadShops() {
       try {
-        const { data } = await axios.get('/api/shops', {
-          headers: { Authorization: `Bearer ${user ? localStorage.getItem('auth_token') : ''}` },
-        })
+        const { data } = await axios.get("/api/shops", {
+          headers: {
+            Authorization: `Bearer ${
+              user ? localStorage.getItem("auth_token") : ""
+            }`,
+          },
+        });
         const list = Array.isArray(data?.data?.shops)
           ? data.data.shops
           : Array.isArray(data?.data)
           ? data.data
           : Array.isArray(data)
           ? data
-          : []
+          : [];
         if (!ignore) {
-          setShops(list)
+          setShops(list);
           // Keep 'all' as default; only set if currently empty
-          if (!selectedShop) setSelectedShop('all')
+          if (!selectedShop) setSelectedShop("all");
         }
       } catch (e) {
-        if (!ignore) setShops([])
+        if (!ignore) setShops([]);
       }
     }
-    loadShops()
-    return () => { ignore = true }
-  }, [user])
+    loadShops();
+    return () => {
+      ignore = true;
+    };
+  }, [user]);
 
-  const value = useMemo(() => ({
-    user,
-    logout,
-    shops,
-    selectedShop,
-    setSelectedShop,
-    period,
-    setPeriod,
-    avatarOpen,
-    setAvatarOpen,
-  }), [user, logout, shops, selectedShop, period, avatarOpen])
+  const value = useMemo(
+    () => ({
+      user,
+      logout,
+      shops,
+      selectedShop,
+      setSelectedShop,
+      period,
+      setPeriod,
+      avatarOpen,
+      setAvatarOpen,
+    }),
+    [user, logout, shops, selectedShop, period, avatarOpen]
+  );
 
   return (
-    <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>
-  )
+    <DashboardContext.Provider value={value}>
+      {children}
+    </DashboardContext.Provider>
+  );
 }
 
 export function useDashboard() {
-  const ctx = useContext(DashboardContext)
-  if (!ctx) throw new Error('useDashboard must be used within a DashboardProvider')
-  return ctx
+  const ctx = useContext(DashboardContext);
+  if (!ctx)
+    throw new Error("useDashboard must be used within a DashboardProvider");
+  return ctx;
 }
