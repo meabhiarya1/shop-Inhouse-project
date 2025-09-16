@@ -55,9 +55,9 @@ function BrandDropdown({
     setIsOpen(true);
   };
 
-  const handleBrandSelect = (brandName) => {
-    setSearchTerm(brandName);
-    onChange(brandName);
+  const handleBrandSelect = (brand) => {
+    setSearchTerm(brand.brand_name);
+    onChange(brand.brand_name, brand.id);
     setIsOpen(false);
   };
 
@@ -91,7 +91,7 @@ function BrandDropdown({
               <div
                 key={brand.id}
                 className="px-3 py-2 hover:bg-white/10 cursor-pointer text-sm"
-                onClick={() => handleBrandSelect(brand.brand_name)}
+                onClick={() => handleBrandSelect(brand)}
               >
                 {brand.brand_name}
               </div>
@@ -142,9 +142,9 @@ function CategoryDropdown({
     setIsOpen(true);
   };
 
-  const handleCategorySelect = (categoryName) => {
-    setSearchTerm(categoryName);
-    onChange(categoryName);
+  const handleCategorySelect = (category) => {
+    setSearchTerm(category.category_name);
+    onChange(category.category_name, category.id);
     setIsOpen(false);
   };
 
@@ -178,7 +178,7 @@ function CategoryDropdown({
               <div
                 key={category.id}
                 className="px-3 py-2 hover:bg-white/10 cursor-pointer text-sm"
-                onClick={() => handleCategorySelect(category.category_name)}
+                onClick={() => handleCategorySelect(category)}
               >
                 {category.category_name}
               </div>
@@ -236,6 +236,8 @@ function ProductsInner() {
     brand_name: "",
     shop_id: "",
     category_name: "",
+    category_id: "",
+    brand_id: "",
   });
 
   const headers = useMemo(
@@ -377,6 +379,8 @@ function ProductsInner() {
           ? String(shops[0].id)
           : "",
       category_name: "",
+      category_id: "",
+      brand_id: "",
     });
     setCreateOpen(true);
   };
@@ -392,9 +396,11 @@ function ProductsInner() {
         thickness: form.thickness ? Number(form.thickness) : null,
         quantity: Number(form.quantity),
         weight: form.weight ? Number(form.weight) : null,
-        brand_name: form.brand_name,
+        brand_name: form.brand_id ? null : form.brand_name,
+        brand_id: form.brand_id,
         shop_id: Number(form.shop_id),
-        category_name: form.category_name,
+        category_name: form.category_id ? null : form.category_name,
+        category_id: form.category_id,
       };
       await axios.post("/api/products", payload, { headers });
       toast.success("Product created");
@@ -421,6 +427,8 @@ function ProductsInner() {
       brand_name: prod.brand?.brand_name ?? prod.brand_name ?? "",
       shop_id: prod.shop?.id ?? prod.shop_id ?? "",
       category_name: prod.category?.category_name ?? prod.category_name ?? "",
+      category_id: prod.category?.id ?? prod.category_id ?? "",
+      brand_id: prod.brand?.id ?? prod.brand_id ?? "",
     });
     setEditOpen(true);
   };
@@ -436,9 +444,11 @@ function ProductsInner() {
         thickness: form.thickness ? Number(form.thickness) : null,
         quantity: Number(form.quantity),
         weight: form.weight ? Number(form.weight) : null,
-        brand_name: form.brand_name,
+        brand_name: form.brand_id ? null : form.brand_name,
+        brand_id: form.brand_id,
         shop_id: Number(form.shop_id),
-        category_name: form.category_name,
+        category_name: form.category_id ? null : form.category_name,
+        category_id: form.category_id,
       };
       await axios.put(`/api/products/${activeProduct.id}`, payload, {
         headers,
@@ -866,8 +876,12 @@ function ProductsInner() {
                   <label className="text-xs text-white/60">Brand Name</label>
                   <BrandDropdown
                     value={form.brand_name}
-                    onChange={(value) =>
-                      setForm({ ...form, brand_name: value })
+                    onChange={(name, id) =>
+                      setForm({
+                        ...form,
+                        brand_name: name,
+                        brand_id: id || null,
+                      })
                     }
                     placeholder="Select or type brand name"
                     brands={brands}
@@ -894,8 +908,12 @@ function ProductsInner() {
                   <label className="text-xs text-white/60">Category Name</label>
                   <CategoryDropdown
                     value={form.category_name}
-                    onChange={(value) =>
-                      setForm({ ...form, category_name: value })
+                    onChange={(name, id) =>
+                      setForm({
+                        ...form,
+                        category_name: name,
+                        category_id: id || null,
+                      })
                     }
                     placeholder="Select or type category name"
                     categories={categories}
@@ -1026,8 +1044,12 @@ function ProductsInner() {
                   <label className="text-xs text-white/60">Brand Name</label>
                   <BrandDropdown
                     value={form.brand_name}
-                    onChange={(value) =>
-                      setForm({ ...form, brand_name: value })
+                    onChange={(name, id) =>
+                      setForm({
+                        ...form,
+                        brand_name: name,
+                        brand_id: id || null,
+                      })
                     }
                     placeholder="Select or type brand name"
                     brands={brands}
@@ -1054,8 +1076,12 @@ function ProductsInner() {
                   <label className="text-xs text-white/60">Category Name</label>
                   <CategoryDropdown
                     value={form.category_name}
-                    onChange={(value) =>
-                      setForm({ ...form, category_name: value })
+                    onChange={(name, id) =>
+                      setForm({
+                        ...form,
+                        category_name: name,
+                        category_id: id || null,
+                      })
                     }
                     placeholder="Select or type category name"
                     categories={categories}

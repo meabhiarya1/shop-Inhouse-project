@@ -1,16 +1,23 @@
-const { validationResult } = require('express-validator');
-const { sequelize } = require('../config/database');
-const Product = require('../models/Product');
-const Brand = require('../models/Brand');
-const Shop = require('../models/Shop');
-const Category = require('../models/Category');
-const { Op } = require('sequelize');
+const { validationResult } = require("express-validator");
+const { sequelize } = require("../config/database");
+const Product = require("../models/Product");
+const Brand = require("../models/Brand");
+const Shop = require("../models/Shop");
+const Category = require("../models/Category");
+const { Op } = require("sequelize");
 
 class ProductController {
   // Get all products
   static async getAllProducts(req, res) {
     try {
-      const { period, start_date, end_date, shop_id, page = 1, limit = 10 } = req.query;
+      const {
+        period,
+        start_date,
+        end_date,
+        shop_id,
+        page = 1,
+        limit = 10,
+      } = req.query;
 
       // Pagination parameters
       const pageNum = Math.max(1, parseInt(page, 10));
@@ -20,7 +27,7 @@ class ProductController {
       // Build where clause based on optional filters
       const where = {};
       // Shop filter: if provided and not 'all', filter; if 'all' or missing, no filter
-      if (shop_id && String(shop_id).toLowerCase() !== 'all') {
+      if (shop_id && String(shop_id).toLowerCase() !== "all") {
         where.shop_id = shop_id;
       }
 
@@ -28,20 +35,35 @@ class ProductController {
       let rangeStart = null;
       let rangeEnd = null;
       const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const startOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        0,
+        0,
+        0
+      );
+      const endOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        23,
+        59,
+        59,
+        999
+      );
 
       if (period) {
         const p = String(period).toLowerCase();
-        if (p === 'today') {
+        if (p === "today") {
           rangeStart = startOfToday;
           rangeEnd = endOfToday;
-        } else if (p === 'yesterday') {
+        } else if (p === "yesterday") {
           const y = new Date(startOfToday);
           y.setDate(y.getDate() - 1);
           rangeStart = y;
           rangeEnd = new Date(startOfToday.getTime() - 1);
-        } else if (p === 'lifetime') {
+        } else if (p === "lifetime") {
           // no range filter
         }
       }
@@ -65,24 +87,24 @@ class ProductController {
         include: [
           {
             model: Brand,
-            as: 'brand',
-            attributes: ['id', 'brand_name']
+            as: "brand",
+            attributes: ["id", "brand_name"],
           },
           {
             model: Shop,
-            as: 'shop',
-            attributes: ['id', 'shop_name']
+            as: "shop",
+            attributes: ["id", "shop_name"],
           },
           {
             model: Category,
-            as: 'category',
-            attributes: ['id', 'category_name']
-          }
+            as: "category",
+            attributes: ["id", "category_name"],
+          },
         ],
-        order: [['product_name', 'ASC']],
+        order: [["product_name", "ASC"]],
         limit: limitNum,
         offset: offset,
-        distinct: true // Important for accurate count with includes
+        distinct: true, // Important for accurate count with includes
       });
 
       // Calculate pagination metadata
@@ -99,14 +121,14 @@ class ProductController {
           total: count,
           totalPages: totalPages,
           hasNextPage: hasNextPage,
-          hasPrevPage: hasPrevPage
-        }
+          hasPrevPage: hasPrevPage,
+        },
       });
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error("Error fetching products:", error);
       res.status(500).json({
         success: false,
-        message: 'Error fetching products'
+        message: "Error fetching products",
       });
     }
   }
@@ -120,38 +142,38 @@ class ProductController {
         include: [
           {
             model: Brand,
-            as: 'brand',
-            attributes: ['id', 'brand_name']
+            as: "brand",
+            attributes: ["id", "brand_name"],
           },
           {
             model: Shop,
-            as: 'shop',
-            attributes: ['id', 'shop_name']
+            as: "shop",
+            attributes: ["id", "shop_name"],
           },
           {
             model: Category,
-            as: 'category',
-            attributes: ['id', 'category_name']
-          }
-        ]
+            as: "category",
+            attributes: ["id", "category_name"],
+          },
+        ],
       });
 
       if (!product) {
         return res.status(404).json({
           success: false,
-          message: 'Product not found'
+          message: "Product not found",
         });
       }
 
       res.status(200).json({
         success: true,
-        data: product
+        data: product,
       });
     } catch (error) {
-      console.error('Error fetching product:', error);
+      console.error("Error fetching product:", error);
       res.status(500).json({
         success: false,
-        message: 'Error fetching product details'
+        message: "Error fetching product details",
       });
     }
   }
@@ -170,14 +192,14 @@ class ProductController {
       // Build where clause
       const where = {};
       let shop = null;
-      const isAll = String(shopId).toLowerCase() === 'all';
+      const isAll = String(shopId).toLowerCase() === "all";
       if (!isAll) {
         // Check if shop exists
         shop = await Shop.findByPk(shopId);
         if (!shop) {
           return res.status(404).json({
             success: false,
-            message: 'Shop not found'
+            message: "Shop not found",
           });
         }
         where.shop_id = shopId;
@@ -187,20 +209,35 @@ class ProductController {
       let rangeStart = null;
       let rangeEnd = null;
       const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const startOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        0,
+        0,
+        0
+      );
+      const endOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        23,
+        59,
+        59,
+        999
+      );
 
       if (period) {
         const p = String(period).toLowerCase();
-        if (p === 'today') {
+        if (p === "today") {
           rangeStart = startOfToday;
           rangeEnd = endOfToday;
-        } else if (p === 'yesterday') {
+        } else if (p === "yesterday") {
           const y = new Date(startOfToday);
           y.setDate(y.getDate() - 1);
           rangeStart = y;
           rangeEnd = new Date(startOfToday.getTime() - 1);
-        } else if (p === 'lifetime') {
+        } else if (p === "lifetime") {
           // no range filter
         }
       }
@@ -224,24 +261,24 @@ class ProductController {
         include: [
           {
             model: Brand,
-            as: 'brand',
-            attributes: ['id', 'brand_name']
+            as: "brand",
+            attributes: ["id", "brand_name"],
           },
           {
             model: Shop,
-            as: 'shop',
-            attributes: ['id', 'shop_name']
+            as: "shop",
+            attributes: ["id", "shop_name"],
           },
           {
             model: Category,
-            as: 'category',
-            attributes: ['id', 'category_name']
-          }
+            as: "category",
+            attributes: ["id", "category_name"],
+          },
         ],
-        order: [['product_name', 'ASC']],
+        order: [["product_name", "ASC"]],
         limit: limitNum,
         offset: offset,
-        distinct: true // Important for accurate count with includes
+        distinct: true, // Important for accurate count with includes
       });
 
       // Calculate pagination metadata
@@ -254,7 +291,7 @@ class ProductController {
         data: {
           shop: shop,
           products: products,
-          totalProducts: count
+          totalProducts: count,
         },
         pagination: {
           currentPage: pageNum,
@@ -262,14 +299,14 @@ class ProductController {
           total: count,
           totalPages: totalPages,
           hasNextPage: hasNextPage,
-          hasPrevPage: hasPrevPage
-        }
+          hasPrevPage: hasPrevPage,
+        },
       });
     } catch (error) {
-      console.error('Error fetching products by shop:', error);
+      console.error("Error fetching products by shop:", error);
       res.status(500).json({
         success: false,
-        message: 'Error fetching products for this shop'
+        message: "Error fetching products for this shop",
       });
     }
   }
@@ -277,15 +314,15 @@ class ProductController {
   // Create new product
   static async createProduct(req, res) {
     const transaction = await sequelize.transaction();
-    
+
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Validation errors',
-          errors: errors.array()
+          message: "Validation errors",
+          errors: errors.array(),
         });
       }
 
@@ -297,88 +334,140 @@ class ProductController {
         quantity,
         weight,
         brand_id,
+        brand_name,
         shop_id,
-        category_id
+        category_id,
+        category_name,
       } = req.body;
 
-      // Verify foreign key references exist
-      const [brand, shop, category] = await Promise.all([
-        Brand.findByPk(brand_id, { transaction }),
-        Shop.findByPk(shop_id, { transaction }),
-        Category.findByPk(category_id, { transaction })
-      ]);
-
-      if (!brand) {
+      // Handle brand - either use provided ID or find/create by name
+      let finalBrandId;
+      if (brand_id) {
+        const brand = await Brand.findByPk(brand_id, { transaction });
+        if (!brand) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: "Brand not found",
+          });
+        }
+        finalBrandId = brand_id;
+      } else if (brand_name) {
+        let brand = await Brand.findOne({
+          where: { brand_name: brand_name.trim().toLowerCase() },
+          transaction,
+        });
+        if (!brand) {
+          brand = await Brand.create(
+            {
+              brand_name: brand_name.trim().toLowerCase(),
+            },
+            { transaction }
+          );
+        }
+        finalBrandId = brand.id;
+      } else {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Brand not found'
+          message: "Either brand_id or brand_name is required",
         });
       }
 
+      // Handle category - either use provided ID or find/create by name
+      let finalCategoryId;
+      if (category_id) {
+        const category = await Category.findByPk(category_id, { transaction });
+        if (!category) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: "Category not found",
+          });
+        }
+        finalCategoryId = category_id;
+      } else if (category_name) {
+        let category = await Category.findOne({
+          where: { category_name: category_name.trim().toLowerCase() },
+          transaction,
+        });
+        if (!category) {
+          category = await Category.create(
+            {
+              category_name: category_name.trim().toLowerCase(),
+            },
+            { transaction }
+          );
+        }
+        finalCategoryId = category.id;
+      } else {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: "Either category_id or category_name is required",
+        });
+      }
+
+      // Verify shop exists
+      const shop = await Shop.findByPk(shop_id, { transaction });
       if (!shop) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Shop not found'
+          message: "Shop not found",
         });
       }
 
-      if (!category) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'Category not found'
-        });
-      }
-
-      const product = await Product.create({
-        product_name: product_name.trim(),
-        length,
-        width,
-        thickness: thickness || null,
-        quantity,
-        weight: weight || null,
-        brand_id,
-        shop_id,
-        category_id
-      }, { transaction });
+      const product = await Product.create(
+        {
+          product_name: product_name.trim(),
+          length,
+          width,
+          thickness: thickness || null,
+          quantity,
+          weight: weight || null,
+          brand_id: finalBrandId,
+          shop_id,
+          category_id: finalCategoryId,
+        },
+        { transaction }
+      );
 
       // Fetch the created product with associations
       const createdProduct = await Product.findByPk(product.id, {
         include: [
           {
             model: Brand,
-            as: 'brand',
-            attributes: ['id', 'brand_name']
+            as: "brand",
+            attributes: ["id", "brand_name"],
           },
           {
             model: Shop,
-            as: 'shop',
-            attributes: ['id', 'shop_name']
+            as: "shop",
+            attributes: ["id", "shop_name"],
           },
           {
             model: Category,
-            as: 'category',
-            attributes: ['id', 'category_name']
-          }
+            as: "category",
+            attributes: ["id", "category_name"],
+          },
         ],
-        transaction
+        transaction,
       });
 
       await transaction.commit();
 
       res.status(201).json({
         success: true,
-        message: 'Product created successfully',
-        data: createdProduct
+        message: "Product created successfully",
+        data: createdProduct,
       });
     } catch (error) {
       await transaction.rollback();
-      console.error('Error creating product:', error);
+      console.error("Error creating product:", error);
       res.status(500).json({
         success: false,
-        message: 'Error creating product'
+        message: "Error creating product",
       });
     }
   }
@@ -386,15 +475,15 @@ class ProductController {
   // Update product
   static async updateProduct(req, res) {
     const transaction = await sequelize.transaction();
-    
+
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Validation errors',
-          errors: errors.array()
+          message: "Validation errors",
+          errors: errors.array(),
         });
       }
 
@@ -407,8 +496,10 @@ class ProductController {
         quantity,
         weight,
         brand_id,
+        brand_name,
         shop_id,
-        category_id
+        category_id,
+        category_name,
       } = req.body;
 
       const product = await Product.findByPk(id, { transaction });
@@ -416,88 +507,138 @@ class ProductController {
         await transaction.rollback();
         return res.status(404).json({
           success: false,
-          message: 'Product not found'
+          message: "Product not found",
         });
       }
 
-      // Verify foreign key references exist
-      const [brand, shop, category] = await Promise.all([
-        Brand.findByPk(brand_id, { transaction }),
-        Shop.findByPk(shop_id, { transaction }),
-        Category.findByPk(category_id, { transaction })
-      ]);
-
-      if (!brand) {
+      // Handle brand - either use provided ID or find/create by name
+      let finalBrandId;
+      if (brand_id) {
+        const brand = await Brand.findByPk(brand_id, { transaction });
+        if (!brand) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: "Brand not found",
+          });
+        }
+        finalBrandId = brand_id;
+      } else if (brand_name) {
+        let brand = await Brand.findOne({
+          where: { brand_name: brand_name.trim() },
+          transaction,
+        });
+        if (!brand) {
+          brand = await Brand.create(
+            {
+              brand_name: brand_name.trim(),
+            },
+            { transaction }
+          );
+        }
+        finalBrandId = brand.id;
+      } else {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Brand not found'
+          message: "Either brand_id or brand_name is required",
         });
       }
 
+      // Handle category - either use provided ID or find/create by name
+      let finalCategoryId;
+      if (category_id) {
+        const category = await Category.findByPk(category_id, { transaction });
+        if (!category) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: "Category not found",
+          });
+        }
+        finalCategoryId = category_id;
+      } else if (category_name) {
+        let category = await Category.findOne({
+          where: { category_name: category_name.trim() },
+          transaction,
+        });
+        if (!category) {
+          category = await Category.create(
+            {
+              category_name: category_name.trim(),
+            },
+            { transaction }
+          );
+        }
+        finalCategoryId = category.id;
+      } else {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: "Either category_id or category_name is required",
+        });
+      }
+
+      // Verify shop exists
+      const shop = await Shop.findByPk(shop_id, { transaction });
       if (!shop) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Shop not found'
+          message: "Shop not found",
         });
       }
 
-      if (!category) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'Category not found'
-        });
-      }
-
-      await product.update({
-        product_name: product_name.trim(),
-        length,
-        width,
-        thickness: thickness || null,
-        quantity,
-        weight: weight || null,
-        brand_id,
-        shop_id,
-        category_id
-      }, { transaction });
+      await product.update(
+        {
+          product_name: product_name.trim(),
+          length,
+          width,
+          thickness: thickness || null,
+          quantity,
+          weight: weight || null,
+          brand_id: finalBrandId,
+          shop_id,
+          category_id: finalCategoryId,
+        },
+        { transaction }
+      );
 
       // Fetch the updated product with associations
       const updatedProduct = await Product.findByPk(id, {
         include: [
           {
             model: Brand,
-            as: 'brand',
-            attributes: ['id', 'brand_name']
+            as: "brand",
+            attributes: ["id", "brand_name"],
           },
           {
             model: Shop,
-            as: 'shop',
-            attributes: ['id', 'shop_name']
+            as: "shop",
+            attributes: ["id", "shop_name"],
           },
           {
             model: Category,
-            as: 'category',
-            attributes: ['id', 'category_name']
-          }
+            as: "category",
+            attributes: ["id", "category_name"],
+          },
         ],
-        transaction
+        transaction,
       });
 
       await transaction.commit();
 
       res.status(200).json({
         success: true,
-        message: 'Product updated successfully',
-        data: updatedProduct
+        message: "Product updated successfully",
+        data: updatedProduct,
       });
     } catch (error) {
       await transaction.rollback();
-      console.error('Error updating product:', error);
+      console.error("Error updating product:", error);
       res.status(500).json({
         success: false,
-        message: 'Error updating product'
+        message: "Error updating product",
       });
     }
   }
@@ -505,15 +646,19 @@ class ProductController {
   // Multiple delete products
   static async deleteMultipleProducts(req, res) {
     const transaction = await sequelize.transaction();
-    
+
     try {
       const { productIds } = req.body;
 
-      if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+      if (
+        !productIds ||
+        !Array.isArray(productIds) ||
+        productIds.length === 0
+      ) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Product IDs array is required and cannot be empty'
+          message: "Product IDs array is required and cannot be empty",
         });
       }
 
@@ -521,20 +666,22 @@ class ProductController {
       const products = await Product.findAll({
         where: {
           id: {
-            [Op.in]: productIds
-          }
+            [Op.in]: productIds,
+          },
         },
-        transaction
+        transaction,
       });
 
       if (products.length !== productIds.length) {
         await transaction.rollback();
-        const foundIds = products.map(p => p.id);
-        const notFoundIds = productIds.filter(id => !foundIds.includes(parseInt(id)));
-        
+        const foundIds = products.map((p) => p.id);
+        const notFoundIds = productIds.filter(
+          (id) => !foundIds.includes(parseInt(id))
+        );
+
         return res.status(404).json({
           success: false,
-          message: `Products not found with IDs: ${notFoundIds.join(', ')}`
+          message: `Products not found with IDs: ${notFoundIds.join(", ")}`,
         });
       }
 
@@ -542,10 +689,10 @@ class ProductController {
       const deletedCount = await Product.destroy({
         where: {
           id: {
-            [Op.in]: productIds
-          }
+            [Op.in]: productIds,
+          },
         },
-        transaction
+        transaction,
       });
 
       await transaction.commit();
@@ -553,14 +700,14 @@ class ProductController {
       res.status(200).json({
         success: true,
         message: `Successfully deleted ${deletedCount} product(s)`,
-        deletedCount: deletedCount
+        deletedCount: deletedCount,
       });
     } catch (error) {
       await transaction.rollback();
-      console.error('Error deleting products:', error);
+      console.error("Error deleting products:", error);
       res.status(500).json({
         success: false,
-        message: 'Error deleting products'
+        message: "Error deleting products",
       });
     }
   }
