@@ -20,11 +20,99 @@ import PeriodSelect from "./navbar/PeriodSelect.jsx";
 import ShopDropdown from "./navbar/ShopDropdown.jsx";
 import AvatarDropdown from "./navbar/AvatarDropdown.jsx";
 
+// BrandDropdown Component
+function BrandDropdown({
+  value,
+  onChange,
+  placeholder = "Select or type brand name",
+  brands = [],
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredBrands, setFilteredBrands] = useState([]);
+
+  // Filter brands based on search term
+  useEffect(() => {
+    if (searchTerm.trim() === "") {
+      setFilteredBrands(brands);
+    } else {
+      const filtered = brands.filter((brand) =>
+        brand.brand_name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredBrands(filtered);
+    }
+  }, [searchTerm, brands]);
+
+  // Initialize filtered brands when brands are loaded
+  useEffect(() => {
+    setFilteredBrands(brands);
+  }, [brands]);
+
+  const handleInputChange = (e) => {
+    const newValue = e.target.value;
+    setSearchTerm(newValue);
+    onChange(newValue); // Allow typing new brand names
+    setIsOpen(true);
+  };
+
+  const handleBrandSelect = (brandName) => {
+    setSearchTerm(brandName);
+    onChange(brandName);
+    setIsOpen(false);
+  };
+
+  const handleFocus = () => {
+    setIsOpen(true);
+    setSearchTerm(value);
+  };
+
+  const handleBlur = () => {
+    // Delay closing to allow for clicks on dropdown items
+    setTimeout(() => setIsOpen(false), 200);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+        value={value}
+        onChange={handleInputChange}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-[#0f1535] border border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filteredBrands.length > 0 ? (
+            filteredBrands.map((brand) => (
+              <div
+                key={brand.id}
+                className="px-3 py-2 hover:bg-white/10 cursor-pointer text-sm"
+                onClick={() => handleBrandSelect(brand.brand_name)}
+              >
+                {brand.brand_name}
+              </div>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-white/60 text-sm">
+              {searchTerm.trim() ? "No brands found" : "No brands available"}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProductsInner() {
   const { selectedShop, period, shops } = useDashboard();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]); // Store all fetched products
+  const [brands, setBrands] = useState([]); // Store all brands
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -66,6 +154,22 @@ function ProductsInner() {
     }),
     []
   );
+
+  const loadBrands = useCallback(async () => {
+    try {
+      const { data } = await axios.get("/api/brands", {
+        headers,
+      });
+
+      const brandsList = Array.isArray(data?.data) ? data.data : [];
+      setBrands(brandsList);
+    } catch (error) {
+      console.error("Error loading brands:", error);
+      // Don't show error toast for brands as it's not critical
+    }
+  }, [headers]);
+
+  console.log(brands);
 
   const loadProducts = useCallback(
     async (page = 1) => {
@@ -151,7 +255,8 @@ function ProductsInner() {
       setCurrentPage(1); // Reset to first page when shop/period changes
       loadProducts(1);
     }
-  }, [selectedShop, period, loadProducts]);
+    loadBrands(); // Load brands on component mount
+  }, [selectedShop, period, loadProducts, loadBrands]);
 
   const openCreate = () => {
     setForm({
@@ -656,13 +761,13 @@ function ProductsInner() {
                 </div>
                 <div>
                   <label className="text-xs text-white/60">Brand Name</label>
-                  <input
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                  <BrandDropdown
                     value={form.brand_name}
-                    onChange={(e) =>
-                      setForm({ ...form, brand_name: e.target.value })
+                    onChange={(value) =>
+                      setForm({ ...form, brand_name: value })
                     }
-                    placeholder="Enter brand name"
+                    placeholder="Select or type brand name"
+                    brands={brands}
                   />
                 </div>
                 <div>
@@ -816,13 +921,13 @@ function ProductsInner() {
                 </div>
                 <div>
                   <label className="text-xs text-white/60">Brand Name</label>
-                  <input
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                  <BrandDropdown
                     value={form.brand_name}
-                    onChange={(e) =>
-                      setForm({ ...form, brand_name: e.target.value })
+                    onChange={(value) =>
+                      setForm({ ...form, brand_name: value })
                     }
-                    placeholder="Enter brand name"
+                    placeholder="Select or type brand name"
+                    brands={brands}
                   />
                 </div>
                 <div>
