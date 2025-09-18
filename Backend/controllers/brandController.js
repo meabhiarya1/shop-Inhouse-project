@@ -56,7 +56,7 @@ class BrandController {
       // Check if another brand with the same name exists
       const existingBrand = await Brand.findOne({
         where: {
-          brand_name: brand_name.trim(),
+          brand_name: brand_name.trim().toLowerCase(),
           id: { [Op.ne]: id },
         },
         transaction,
@@ -72,7 +72,7 @@ class BrandController {
 
       await brand.update(
         {
-          brand_name: brand_name.trim(),
+          brand_name: brand_name.trim().toLowerCase(),
         },
         { transaction }
       );

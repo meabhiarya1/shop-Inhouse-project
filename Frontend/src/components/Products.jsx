@@ -396,10 +396,12 @@ function ProductsInner() {
         thickness: form.thickness ? Number(form.thickness) : null,
         quantity: Number(form.quantity),
         weight: form.weight ? Number(form.weight) : null,
-        brand_name: form.brand_id ? null : form.brand_name,
+        brand_name: form.brand_id ? null : form.brand_name.toLowerCase(),
         brand_id: form.brand_id,
         shop_id: Number(form.shop_id),
-        category_name: form.category_id ? null : form.category_name,
+        category_name: form.category_id
+          ? null
+          : form.category_name.toLowerCase(),
         category_id: form.category_id,
       };
       await axios.post("/api/products", payload, { headers });
@@ -408,7 +410,9 @@ function ProductsInner() {
       loadProducts(currentPage);
     } catch (e) {
       toast.error(
-        e?.response?.data?.message || e.message || "Failed to create product"
+        e?.response?.data?.errors[0]?.msg ||
+          e.message ||
+          "Failed to create product"
       );
     } finally {
       setCreateLoading(false);
@@ -444,10 +448,12 @@ function ProductsInner() {
         thickness: form.thickness ? Number(form.thickness) : null,
         quantity: Number(form.quantity),
         weight: form.weight ? Number(form.weight) : null,
-        brand_name: form.brand_id ? null : form.brand_name,
+        brand_name: form.brand_id ? null : form.brand_name.toLowerCase(),
         brand_id: form.brand_id,
         shop_id: Number(form.shop_id),
-        category_name: form.category_id ? null : form.category_name,
+        category_name: form.category_id
+          ? null
+          : form.category_name.toLowerCase(),
         category_id: form.category_id,
       };
       await axios.put(`/api/products/${activeProduct.id}`, payload, {
@@ -767,16 +773,16 @@ function ProductsInner() {
                               )}
                             </button>
                           </td>
-                          <td className="p-2 text-xs md:text-sm">
+                          <td className="p-2 text-xs md:text-sm capitalize">
                             {p.product_name}
                           </td>
-                          <td className="p-2 text-xs md:text-sm hidden md:table-cell">
+                          <td className="p-2 text-xs md:text-sm hidden md:table-cell capitalize">
                             {p?.brand?.brand_name || "-"}
                           </td>
-                          <td className="p-2 text-xs md:text-sm hidden md:table-cell">
+                          <td className="p-2 text-xs md:text-sm hidden md:table-cell capitalize">
                             {p?.shop?.shop_name || "-"}
                           </td>
-                          <td className="p-2 text-xs md:text-sm hidden md:table-cell">
+                          <td className="p-2 text-xs md:text-sm hidden md:table-cell capitalize">
                             {p?.category?.category_name || "-"}
                           </td>
                           <td className="p-2 text-right text-xs md:text-sm">
@@ -865,10 +871,13 @@ function ProductsInner() {
                 <div>
                   <label className="text-xs text-white/60">Name</label>
                   <input
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1 capitalize"
                     value={form.product_name}
                     onChange={(e) =>
-                      setForm({ ...form, product_name: e.target.value })
+                      setForm({
+                        ...form,
+                        product_name: e.target.value.toLowerCase(),
+                      })
                     }
                   />
                 </div>
@@ -1033,10 +1042,13 @@ function ProductsInner() {
                 <div>
                   <label className="text-xs text-white/60">Name</label>
                   <input
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1 capitalize"
                     value={form.product_name}
                     onChange={(e) =>
-                      setForm({ ...form, product_name: e.target.value })
+                      setForm({
+                        ...form,
+                        product_name: e.target.value.toLowerCase(),
+                      })
                     }
                   />
                 </div>
@@ -1188,24 +1200,24 @@ function ProductsInner() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-white/60">Name</p>
-                <p>{activeProduct?.product_name}</p>
+                <p className="capitalize">{activeProduct?.product_name}</p>
               </div>
               <div>
                 <p className="text-white/60">Brand</p>
-                <p>
+                <p className="capitalize">
                   {activeProduct?.brand?.brand_name ||
                     activeProduct?.brand_name}
                 </p>
               </div>
               <div>
                 <p className="text-white/60">Shop</p>
-                <p>
+                <p className="capitalize">
                   {activeProduct?.shop?.shop_name || activeProduct?.shop_id}
                 </p>
               </div>
               <div>
                 <p className="text-white/60">Category</p>
-                <p>
+                <p className="capitalize">
                   {activeProduct?.category?.category_name ||
                     activeProduct?.category_id}
                 </p>

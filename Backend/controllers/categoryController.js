@@ -32,7 +32,11 @@ class CategoryController {
       const where = undefined;
       const { count, rows } = await Category.findAndCountAll({
         where,
-        order: [["category_name", "ASC"]],
+        order: [
+          ["updatedAt", "DESC"],
+          ["createdAt", "DESC"],
+          ["category_name", "ASC"],
+        ],
         limit,
         offset,
         distinct: true, // Important for accurate count
@@ -134,7 +138,7 @@ class CategoryController {
 
       // Check if category already exists
       const existingCategory = await Category.findOne({
-        where: { category_name: category_name.trim() },
+        where: { category_name: category_name.trim().toLowerCase() },
         transaction,
       });
 
@@ -148,7 +152,7 @@ class CategoryController {
 
       const category = await Category.create(
         {
-          category_name: category_name.trim(),
+          category_name: category_name.trim().toLowerCase(),
         },
         { transaction }
       );
@@ -200,7 +204,7 @@ class CategoryController {
       // Check if another category with the same name exists
       const existingCategory = await Category.findOne({
         where: {
-          category_name: category_name.trim(),
+          category_name: category_name.trim().toLowerCase(),
           id: { [require("sequelize").Op.ne]: id },
         },
         transaction,
@@ -216,7 +220,7 @@ class CategoryController {
 
       await category.update(
         {
-          category_name: category_name.trim(),
+          category_name: category_name.trim().toLowerCase(),
         },
         { transaction }
       );
@@ -298,7 +302,11 @@ class CategoryController {
         });
       }
       const categories = await Category.findAll({
-        order: [["category_name", "ASC"]],
+        order: [
+          ["updatedAt", "DESC"],
+          ["createdAt", "DESC"],
+          ["category_name", "ASC"],
+        ],
       });
       res.status(200).json({
         success: true,

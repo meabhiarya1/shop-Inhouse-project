@@ -101,7 +101,11 @@ class ProductController {
             attributes: ["id", "category_name"],
           },
         ],
-        order: [["product_name", "ASC"]],
+        order: [
+          ["updatedAt", "DESC"],
+          ["createdAt", "DESC"],
+          ["product_name", "ASC"],
+        ],
         limit: limitNum,
         offset: offset,
         distinct: true, // Important for accurate count with includes
@@ -275,7 +279,11 @@ class ProductController {
             attributes: ["id", "category_name"],
           },
         ],
-        order: [["product_name", "ASC"]],
+        order: [
+          ["updatedAt", "DESC"],
+          ["createdAt", "DESC"],
+          ["product_name", "ASC"],
+        ],
         limit: limitNum,
         offset: offset,
         distinct: true, // Important for accurate count with includes
@@ -420,7 +428,7 @@ class ProductController {
 
       const product = await Product.create(
         {
-          product_name: product_name.trim(),
+          product_name: product_name.trim().toLowerCase(),
           length,
           width,
           thickness: thickness || null,
@@ -591,7 +599,7 @@ class ProductController {
 
       await product.update(
         {
-          product_name: product_name.trim(),
+          product_name: product_name.trim().toLowerCase(),
           length,
           width,
           thickness: thickness || null,
