@@ -37,6 +37,7 @@ const paginationValidation = [
 ];
 
 router.get("/", paginationValidation, CategoryController.getAllCategories);
+router.get("/search", CategoryController.searchCategories);
 router.get("/dropdown", CategoryController.getAllCategoriesForDropDown);
 router.get(
   "/:categoryId/products",

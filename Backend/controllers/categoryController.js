@@ -320,6 +320,73 @@ class CategoryController {
       });
     }
   }
+
+  // Search categories by query string
+  static async searchCategories(req, res) {
+    try {
+      const { q, page = 1, limit = 10 } = req.query;
+
+      // Validate search query
+      if (!q || q.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Search query is required",
+        });
+      }
+
+      // Pagination parameters
+      const pageNum = Math.max(1, parseInt(page, 10));
+      const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10))); // Max 100 per page
+      const offset = (pageNum - 1) * limitNum;
+
+      // Build search query - search across category name
+      const searchTerm = q.trim().toLowerCase();
+      const where = {
+        category_name: { [Op.like]: `%${searchTerm}%` },
+      };
+
+      // Get categories with pagination and total count
+      const { count, rows: categories } = await Category.findAndCountAll({
+        where,
+        order: [
+          ["updatedAt", "DESC"],
+          ["createdAt", "DESC"],
+          ["category_name", "ASC"],
+        ],
+        limit: limitNum,
+        offset: offset,
+        distinct: true, // Important for accurate count
+      });
+
+      // Calculate pagination metadata
+      const totalPages = Math.ceil(count / limitNum);
+      const hasNextPage = pageNum < totalPages;
+      const hasPrevPage = pageNum > 1;
+
+      res.status(200).json({
+        success: true,
+        data: {
+          categories: categories,
+          totalCategories: count,
+          searchQuery: q,
+        },
+        pagination: {
+          currentPage: pageNum,
+          limit: limitNum,
+          total: count,
+          totalPages: totalPages,
+          hasNextPage: hasNextPage,
+          hasPrevPage: hasPrevPage,
+        },
+      });
+    } catch (error) {
+      console.error("Error searching categories:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error searching categories",
+      });
+    }
+  }
 }
 
 module.exports = CategoryController;

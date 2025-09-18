@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import { Menu, Plus, Pencil, Trash2, Info, Search } from "lucide-react";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -38,6 +44,8 @@ function CategoriesInner() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [detailsLoadingId, setDetailsLoadingId] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef(null);
 
   const headers = useMemo(
     () => ({
@@ -93,22 +101,115 @@ function CategoriesInner() {
     }
   };
 
+  // Search categories using API
+  const searchCategories = useCallback(
+    async (query, page = 1) => {
+      if (!query || query.trim().length === 0) {
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const params = {
+          q: query.trim(),
+          page,
+          limit: 10,
+        };
+        const { data } = await axios.get("/api/categories/search", {
+          params,
+          headers,
+        });
+
+        const categoriesList = Array.isArray(data?.data?.categories)
+          ? data.data.categories
+          : [];
+
+        setCategories(categoriesList);
+
+        if (data?.pagination) {
+          setPagination(data.pagination);
+          setCurrentPage(data.pagination.currentPage);
+        } else {
+          const totalCategories =
+            data?.data?.totalCategories || categoriesList.length;
+          const totalPages = Math.ceil(totalCategories / 10);
+          setPagination({
+            currentPage: page,
+            limit: 10,
+            total: totalCategories,
+            totalPages: totalPages,
+            hasNextPage: page < totalPages,
+            hasPrevPage: page > 1,
+          });
+          setCurrentPage(page);
+        }
+      } catch (e) {
+        toast.error(
+          e?.response?.data?.message ||
+            e.message ||
+            "Failed to search categories"
+        );
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [headers]
+  );
+
   const handlePageChange = (page) => {
     setCurrentPage(page);
-    loadCategories(page);
+
+    // If we have a search term active, use search API pagination
+    if (searchTerm) {
+      searchCategories(searchTerm, page);
+    } else {
+      // Normal server-side pagination
+      loadCategories(page);
+    }
   };
 
   useEffect(() => {
     loadCategories(currentPage);
   }, []);
-  // Frontend-only search: filter locally from current state
-  const filteredCategories = useMemo(() => {
-    const q = (searchTerm || "").trim().toLowerCase();
-    if (!q) return categories;
-    return categories.filter((c) =>
-      (c?.category_name || "").toLowerCase().includes(q)
-    );
-  }, [categories, searchTerm]);
+
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    (query) => {
+      // Clear existing timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+
+      // Set new timeout
+      searchTimeoutRef.current = setTimeout(() => {
+        if (query && query.trim()) {
+          searchCategories(query, 1);
+        } else {
+          // Clear search and reload normal categories
+          setSearchTerm("");
+          setCurrentPage(1);
+          loadCategories(1);
+        }
+      }, 500); // 500ms debounce delay
+    },
+    [searchCategories, loadCategories]
+  );
+
+  // Handle search input change
+  const handleSearch = (e) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    debouncedSearch(term);
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const openCreate = () => {
     setFormName("");
@@ -202,6 +303,7 @@ function CategoriesInner() {
       setDetails(payload);
       setDetailsOpen(true);
     } catch (e) {
+      console.log(e);
       setDetails({ category: cat, products: [] });
       setDetailsOpen(true);
     } finally {
@@ -286,17 +388,25 @@ function CategoriesInner() {
                     className="w-full h-10 pl-9 pr-8 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     placeholder="Search categories..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={handleSearch}
                   />
-                  {searchTerm && (
-                    <button
-                      className="absolute inset-y-0 right-0 pr-2 flex items-center text-white/60 hover:text-white"
-                      onClick={() => setSearchTerm("")}
-                      title="Clear"
-                    >
-                      ✕
-                    </button>
-                  )}
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+                    {isSearching ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white/60"></div>
+                    ) : searchTerm ? (
+                      <button
+                        onClick={() => {
+                          setSearchTerm("");
+                          setCurrentPage(1);
+                          loadCategories(1);
+                        }}
+                        className="text-white/60 hover:text-white"
+                        title="Clear"
+                      >
+                        ✕
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
 
                 <button
@@ -321,32 +431,20 @@ function CategoriesInner() {
                       </tr>
                     </thead>
                     <tbody>
-                      {loading ? (
-                        Array.from({ length: pagination.limit }).map((_, i) => (
-                          <tr
-                            key={`skeleton-${i}`}
-                            className="border-t border-white/10"
-                          >
-                            <td className="p-2 pr-4">
-                              <div className="h-4 w-1/2 sm:w-2/5 bg-white/10 rounded animate-pulse" />
-                            </td>
-                            <td className="p-2 w-40">
-                              <div className="flex items-center gap-2">
-                                <div className="h-6 w-8 bg-white/10 rounded animate-pulse" />
-                                <div className="h-6 w-8 bg-white/10 rounded animate-pulse" />
-                                <div className="h-6 w-8 bg-white/10 rounded animate-pulse" />
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      ) : filteredCategories.length === 0 ? (
+                      {loading || isSearching ? (
+                        <tr>
+                          <td className="p-2 text-xs md:text-sm" colSpan={2}>
+                            {isSearching ? "Searching..." : "Loading..."}
+                          </td>
+                        </tr>
+                      ) : categories.length === 0 ? (
                         <tr>
                           <td className="p-2" colSpan={2}>
                             No categories found
                           </td>
                         </tr>
                       ) : (
-                        filteredCategories.map((c) => (
+                        categories.map((c) => (
                           <tr
                             key={c.id}
                             className="border-t border-white/10 hover:bg-white/5"
@@ -409,7 +507,7 @@ function CategoriesInner() {
               </div>
 
               {/* Pagination */}
-              {!loading && pagination.totalPages > 1 && (
+              {!loading && !isSearching && pagination.totalPages > 1 && (
                 <div className="mt-6 pt-4 border-t border-white/10">
                   <Pagination
                     currentPage={pagination.currentPage}
