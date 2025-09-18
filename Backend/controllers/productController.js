@@ -719,6 +719,95 @@ class ProductController {
       });
     }
   }
+
+  // Search products by query string
+  static async searchProducts(req, res) {
+    try {
+      const { q, page = 1, limit = 10 } = req.query;
+
+      // Validate search query
+      if (!q || q.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Search query is required",
+        });
+      }
+
+      // Pagination parameters
+      const pageNum = Math.max(1, parseInt(page, 10));
+      const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10))); // Max 100 per page
+      const offset = (pageNum - 1) * limitNum;
+
+      // Build search query - search across multiple fields
+      const searchTerm = q.trim().toLowerCase();
+      const where = {
+        [Op.or]: [
+          { product_name: { [Op.like]: `%${searchTerm}%` } },
+          { "$brand.brand_name$": { [Op.like]: `%${searchTerm}%` } },
+          { "$shop.shop_name$": { [Op.like]: `%${searchTerm}%` } },
+          { "$category.category_name$": { [Op.like]: `%${searchTerm}%` } },
+        ],
+      };
+
+      // Get products with pagination and total count
+      const { count, rows: products } = await Product.findAndCountAll({
+        where,
+        include: [
+          {
+            model: Brand,
+            as: "brand",
+            attributes: ["id", "brand_name"],
+          },
+          {
+            model: Shop,
+            as: "shop",
+            attributes: ["id", "shop_name"],
+          },
+          {
+            model: Category,
+            as: "category",
+            attributes: ["id", "category_name"],
+          },
+        ],
+        order: [
+          ["updatedAt", "DESC"],
+          ["createdAt", "DESC"],
+          ["product_name", "ASC"],
+        ],
+        limit: limitNum,
+        offset: offset,
+        distinct: true, // Important for accurate count with includes
+      });
+
+      // Calculate pagination metadata
+      const totalPages = Math.ceil(count / limitNum);
+      const hasNextPage = pageNum < totalPages;
+      const hasPrevPage = pageNum > 1;
+
+      res.status(200).json({
+        success: true,
+        data: {
+          products: products,
+          totalProducts: count,
+          searchQuery: q,
+        },
+        pagination: {
+          currentPage: pageNum,
+          limit: limitNum,
+          total: count,
+          totalPages: totalPages,
+          hasNextPage: hasNextPage,
+          hasPrevPage: hasPrevPage,
+        },
+      });
+    } catch (error) {
+      console.error("Error searching products:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error searching products",
+      });
+    }
+  }
 }
 
 module.exports = ProductController;

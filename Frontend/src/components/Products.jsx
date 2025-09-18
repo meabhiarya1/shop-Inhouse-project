@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import {
   Menu,
   Plus,
@@ -200,7 +206,6 @@ function ProductsInner() {
   const { selectedShop, period, shops } = useDashboard();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);
-  const [allProducts, setAllProducts] = useState([]); // Store all fetched products
   const [brands, setBrands] = useState([]); // Store all brands
   const [categories, setCategories] = useState([]); // Store all categories
   const [searchTerm, setSearchTerm] = useState("");
@@ -225,6 +230,8 @@ function ProductsInner() {
 
   const [activeProduct, setActiveProduct] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef(null);
 
   const [form, setForm] = useState({
     product_name: "",
@@ -297,12 +304,7 @@ function ProductsInner() {
           ? data
           : [];
 
-        // Always store all products for page 1 for search capabilities
-        if (page === 1) {
-          setAllProducts(productsList);
-        }
-
-        // Always show the loaded products (no search filtering here)
+        // Always show the loaded products
         setProducts(productsList);
 
         // Set pagination data - always use server data when not searching
@@ -336,16 +338,65 @@ function ProductsInner() {
     [selectedShop, period, headers]
   );
 
+  // Search products using API
+  const searchProducts = useCallback(
+    async (query, page = 1) => {
+      if (!query || query.trim().length === 0) {
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const params = {
+          q: query.trim(),
+          page,
+          limit: 10,
+        };
+        const { data } = await axios.get("/api/products/search", {
+          params,
+          headers,
+        });
+
+        const productsList = Array.isArray(data?.data?.products)
+          ? data.data.products
+          : [];
+
+        setProducts(productsList);
+
+        if (data?.pagination) {
+          setPagination(data.pagination);
+          setCurrentPage(data.pagination.currentPage);
+        } else {
+          const totalProducts =
+            data?.data?.totalProducts || productsList.length;
+          const totalPages = Math.ceil(totalProducts / 10);
+          setPagination({
+            currentPage: page,
+            limit: 10,
+            total: totalProducts,
+            totalPages: totalPages,
+            hasNextPage: page < totalPages,
+            hasPrevPage: page > 1,
+          });
+          setCurrentPage(page);
+        }
+      } catch (e) {
+        toast.error(
+          e?.response?.data?.message || e.message || "Failed to search products"
+        );
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [headers]
+  );
+
   const handlePageChange = (page) => {
     setCurrentPage(page);
 
-    // If we have a search term active, we're doing client-side pagination
+    // If we have a search term active, use search API pagination
     if (searchTerm) {
-      // No need to reload from server, just update the current page
-      setPagination((prev) => ({
-        ...prev,
-        currentPage: page,
-      }));
+      searchProducts(searchTerm, page);
     } else {
       // Normal server-side pagination
       loadProducts(page);
@@ -492,67 +543,44 @@ function ProductsInner() {
     }
   };
 
-  // Function to filter products based on search term
-  const filterProducts = (productsToFilter, term) => {
-    if (!term) return productsToFilter;
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    (query) => {
+      // Clear existing timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
 
-    // Convert search term to lowercase for case-insensitive matching
-    const searchLower = term.toLowerCase().trim();
-
-    return productsToFilter.filter((p) => {
-      // Helper function to safely check if a value contains the search term
-      const containsSearch = (value) => {
-        if (value === undefined || value === null) return false;
-        return String(value).toLowerCase().includes(searchLower);
-      };
-
-      // Check all relevant fields
-      return (
-        containsSearch(p.product_name) ||
-        containsSearch(p.brand?.brand_name) ||
-        containsSearch(p.brand_name) ||
-        containsSearch(p.shop?.shop_name) ||
-        containsSearch(p.shop_id) ||
-        containsSearch(p.category?.category_name) ||
-        containsSearch(p.category_name) ||
-        containsSearch(p.quantity) ||
-        containsSearch(p.length) ||
-        containsSearch(p.width) ||
-        containsSearch(p.thickness) ||
-        containsSearch(p.weight)
-      );
-    });
-  };
+      // Set new timeout
+      searchTimeoutRef.current = setTimeout(() => {
+        if (query && query.trim()) {
+          searchProducts(query, 1);
+        } else {
+          // Clear search and reload normal products
+          setSearchTerm("");
+          setCurrentPage(1);
+          loadProducts(1);
+        }
+      }, 500); // 500ms debounce delay
+    },
+    [searchProducts, loadProducts]
+  );
 
   // Handle search input change
   const handleSearch = (e) => {
     const term = e.target.value;
     setSearchTerm(term);
-
-    if (term && term.trim()) {
-      // Apply filter to all products when searching
-      const filtered = filterProducts(allProducts, term);
-      setProducts(filtered);
-
-      // Update pagination but keep pagination UI visible
-      setPagination((prev) => {
-        const totalPages = Math.max(1, Math.ceil(filtered.length / prev.limit));
-        return {
-          ...prev,
-          currentPage: 1,
-          total: filtered.length,
-          totalPages: totalPages,
-          hasNextPage: filtered.length > prev.limit,
-          hasPrevPage: false,
-        };
-      });
-      setCurrentPage(1);
-    } else {
-      // When search is cleared (empty or just spaces), reload current page from server
-      setSearchTerm(""); // Ensure it's completely empty
-      loadProducts(currentPage);
-    }
+    debouncedSearch(term);
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleDeleteMultiple = async () => {
     if (selectedIds.length === 0)
@@ -630,20 +658,23 @@ function ProductsInner() {
                     onChange={handleSearch}
                     className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   />
-                  {searchTerm && (
-                    <div className="absolute right-0 inset-y-0 flex items-center pr-3">
+                  <div className="absolute right-0 inset-y-0 flex items-center pr-3">
+                    {isSearching ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white/60"></div>
+                    ) : searchTerm ? (
                       <button
                         onClick={() => {
                           setSearchTerm("");
-                          loadProducts(currentPage);
+                          setCurrentPage(1);
+                          loadProducts(1);
                         }}
                         className="text-white/60 hover:text-white"
                         aria-label="Clear search"
                       >
                         ✕
                       </button>
-                    </div>
-                  )}
+                    ) : null}
+                  </div>
                 </div>
 
                 {/* Right side - Action buttons */}
@@ -739,10 +770,10 @@ function ProductsInner() {
                     </tr>
                   </thead>
                   <tbody>
-                    {loading ? (
+                    {loading || isSearching ? (
                       <tr>
                         <td className="p-2 text-xs md:text-sm" colSpan={9}>
-                          Loading...
+                          {isSearching ? "Searching..." : "Loading..."}
                         </td>
                       </tr>
                     ) : products.length === 0 ? (
@@ -825,7 +856,7 @@ function ProductsInner() {
               </div>
 
               {/* Pagination - Always show if not loading */}
-              {!loading && (
+              {!loading && !isSearching && (
                 <div className="mt-6 pt-4 border-t border-white/10">
                   <Pagination
                     currentPage={pagination.currentPage}
