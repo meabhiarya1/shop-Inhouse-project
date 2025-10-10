@@ -245,7 +245,48 @@ function ProductsInner() {
     category_name: "",
     category_id: "",
     brand_id: "",
+    hasDimensions: false,
+    hasWeight: false,
   });
+
+  // Helper function to handle checkbox changes with validation
+  const handleCheckboxChange = (checkboxType, checked) => {
+    setForm((prevForm) => {
+      const newForm = { ...prevForm };
+
+      if (checkboxType === "dimensions") {
+        newForm.hasDimensions = checked;
+        // If unchecking dimensions, set values to 0
+        if (!checked) {
+          newForm.length = 0;
+          newForm.width = 0;
+          newForm.thickness = 0;
+        }
+      } else if (checkboxType === "weight") {
+        newForm.hasWeight = checked;
+        // If unchecking weight, set value to 0
+        if (!checked) {
+          newForm.weight = 0;
+        }
+      }
+
+      // Prevent unchecking both checkboxes
+      if (!newForm.hasDimensions && !newForm.hasWeight) {
+        // If trying to uncheck the last checked box, prevent it
+        if (checkboxType === "dimensions" && prevForm.hasWeight) {
+          newForm.hasDimensions = true; // Keep dimensions checked
+          newForm.length = prevForm.length;
+          newForm.width = prevForm.width;
+          newForm.thickness = prevForm.thickness;
+        } else if (checkboxType === "weight" && prevForm.hasDimensions) {
+          newForm.hasWeight = true; // Keep weight checked
+          newForm.weight = prevForm.weight;
+        }
+      }
+
+      return newForm;
+    });
+  };
 
   const headers = useMemo(
     () => ({
@@ -432,21 +473,62 @@ function ProductsInner() {
       category_name: "",
       category_id: "",
       brand_id: "",
+      hasDimensions: false,
+      hasWeight: false,
     });
     setCreateOpen(true);
   };
 
   const handleCreate = async (e) => {
     e.preventDefault();
+
+    // Validation
+    const errors = [];
+
+    // Always required fields
+    if (!form.product_name.trim()) errors.push("Product name is required");
+    if (!form.quantity || form.quantity === "")
+      errors.push("Quantity is required");
+    if (!form.brand_name.trim()) errors.push("Brand name is required");
+    if (!form.category_name.trim()) errors.push("Category name is required");
+
+    // At least one checkbox must be checked
+    if (!form.hasDimensions && !form.hasWeight) {
+      errors.push(
+        "At least one option (Dimensions or Weight) must be selected"
+      );
+    }
+
+    // Conditional validation based on checkboxes
+    if (form.hasDimensions) {
+      if (!form.length || form.length === "")
+        errors.push("Length is required when Dimensions is checked");
+      if (!form.width || form.width === "")
+        errors.push("Width is required when Dimensions is checked");
+      if (!form.thickness || form.thickness === "")
+        errors.push("Thickness is required when Dimensions is checked");
+    }
+
+    if (form.hasWeight) {
+      if (!form.weight || form.weight === "")
+        errors.push("Weight is required when Weight is checked");
+    }
+
+    // Show validation errors
+    if (errors.length > 0) {
+      toast.error(errors.join(", "));
+      return;
+    }
+
     setCreateLoading(true);
     try {
       const payload = {
         ...form,
-        length: Number(form.length),
-        width: Number(form.width),
-        thickness: form.thickness ? Number(form.thickness) : null,
+        length: form.hasDimensions ? Number(form.length) : 0,
+        width: form.hasDimensions ? Number(form.width) : 0,
+        thickness: form.hasDimensions ? Number(form.thickness) : 0,
         quantity: Number(form.quantity),
-        weight: form.weight ? Number(form.weight) : null,
+        weight: form.hasWeight ? Number(form.weight) : 0,
         brand_name: form.brand_id ? null : form.brand_name.toLowerCase(),
         brand_id: form.brand_id,
         shop_id: Number(form.shop_id),
@@ -484,21 +566,62 @@ function ProductsInner() {
       category_name: prod.category?.category_name ?? prod.category_name ?? "",
       category_id: prod.category?.id ?? prod.category_id ?? "",
       brand_id: prod.brand?.id ?? prod.brand_id ?? "",
+      hasDimensions: !!(prod.length || prod.width || prod.thickness),
+      hasWeight: !!prod.weight,
     });
     setEditOpen(true);
   };
 
   const handleEdit = async (e) => {
     e.preventDefault();
+
+    // Validation
+    const errors = [];
+
+    // Always required fields
+    if (!form.product_name.trim()) errors.push("Product name is required");
+    if (!form.quantity || form.quantity === "")
+      errors.push("Quantity is required");
+    if (!form.brand_name.trim()) errors.push("Brand name is required");
+    if (!form.category_name.trim()) errors.push("Category name is required");
+
+    // At least one checkbox must be checked
+    if (!form.hasDimensions && !form.hasWeight) {
+      errors.push(
+        "At least one option (Dimensions or Weight) must be selected"
+      );
+    }
+
+    // Conditional validation based on checkboxes
+    if (form.hasDimensions) {
+      if (!form.length || form.length === "")
+        errors.push("Length is required when Dimensions is checked");
+      if (!form.width || form.width === "")
+        errors.push("Width is required when Dimensions is checked");
+      if (!form.thickness || form.thickness === "")
+        errors.push("Thickness is required when Dimensions is checked");
+    }
+
+    if (form.hasWeight) {
+      if (!form.weight || form.weight === "")
+        errors.push("Weight is required when Weight is checked");
+    }
+
+    // Show validation errors
+    if (errors.length > 0) {
+      toast.error(errors.join(", "));
+      return;
+    }
+
     setEditLoading(true);
     try {
       const payload = {
         ...form,
-        length: Number(form.length),
-        width: Number(form.width),
-        thickness: form.thickness ? Number(form.thickness) : null,
+        length: form.hasDimensions ? Number(form.length) : 0,
+        width: form.hasDimensions ? Number(form.width) : 0,
+        thickness: form.hasDimensions ? Number(form.thickness) : 0,
         quantity: Number(form.quantity),
-        weight: form.weight ? Number(form.weight) : null,
+        weight: form.hasWeight ? Number(form.weight) : 0,
         brand_name: form.brand_id ? null : form.brand_name.toLowerCase(),
         brand_id: form.brand_id,
         shop_id: Number(form.shop_id),
@@ -889,13 +1012,40 @@ function ProductsInner() {
 
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold">Create Product</h3>
-              <button
-                className="text-white/60"
-                onClick={() => setCreateOpen(false)}
-                disabled={createLoading}
-              >
-                ✕
-              </button>
+              <div className="flex flex-col items-end">
+                <button
+                  className="text-white/60"
+                  onClick={() => setCreateOpen(false)}
+                  disabled={createLoading}
+                >
+                  ✕
+                </button>
+                {/* Checkboxes */}
+                <div className="flex gap-4 mt-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.hasDimensions}
+                      onChange={(e) =>
+                        handleCheckboxChange("dimensions", e.target.checked)
+                      }
+                      className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
+                    />
+                    <span className="text-sm text-white/80">Dimensions</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.hasWeight}
+                      onChange={(e) =>
+                        handleCheckboxChange("weight", e.target.checked)
+                      }
+                      className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
+                    />
+                    <span className="text-sm text-white/80">Weight</span>
+                  </label>
+                </div>
+              </div>
             </div>
             <form onSubmit={handleCreate} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -903,6 +1053,7 @@ function ProductsInner() {
                   <label className="text-xs text-white/60">Name</label>
                   <input
                     className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1 capitalize"
+                    placeholder="Enter Product Name"
                     value={form.product_name}
                     onChange={(e) =>
                       setForm({
@@ -959,66 +1110,78 @@ function ProductsInner() {
                     categories={categories}
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-white/60">Length</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={form.length}
-                    onChange={(e) =>
-                      setForm({ ...form, length: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-white/60">Width</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={form.width}
-                    onChange={(e) =>
-                      setForm({ ...form, width: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-white/60">Thickness</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={form.thickness}
-                    onChange={(e) =>
-                      setForm({ ...form, thickness: e.target.value })
-                    }
-                  />
-                </div>
+                {form.hasDimensions && (
+                  <>
+                    <div>
+                      <label className="text-xs text-white/60">Length</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                        placeholder="Enter size in ft/inches"
+                        value={form.length}
+                        onChange={(e) =>
+                          setForm({ ...form, length: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/60">Width</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                        placeholder="Enter size in ft/inches"
+                        value={form.width}
+                        onChange={(e) =>
+                          setForm({ ...form, width: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/60">Thickness</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                        placeholder="Enter in mm"
+                        value={form.thickness}
+                        onChange={(e) =>
+                          setForm({ ...form, thickness: e.target.value })
+                        }
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="text-xs text-white/60">Quantity</label>
                   <input
                     type="number"
                     className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                    placeholder="Enter Quantity (e.g:25)"
                     value={form.quantity}
                     onChange={(e) =>
                       setForm({ ...form, quantity: e.target.value })
                     }
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-white/60">Weight</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={form.weight}
-                    onChange={(e) =>
-                      setForm({ ...form, weight: e.target.value })
-                    }
-                  />
-                </div>
+                {form.hasWeight && (
+                  <div>
+                    <label className="text-xs text-white/60">Weight</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                      placeholder="Enter in kg/grams"
+                      value={form.weight}
+                      onChange={(e) =>
+                        setForm({ ...form, weight: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
               </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -1060,13 +1223,40 @@ function ProductsInner() {
 
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold">Edit Product</h3>
-              <button
-                className="text-white/60"
-                onClick={() => setEditOpen(false)}
-                disabled={editLoading}
-              >
-                ✕
-              </button>
+              <div className="flex flex-col items-end">
+                <button
+                  className="text-white/60"
+                  onClick={() => setEditOpen(false)}
+                  disabled={editLoading}
+                >
+                  ✕
+                </button>
+                {/* Checkboxes */}
+                <div className="flex gap-4 mt-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.hasDimensions}
+                      onChange={(e) =>
+                        handleCheckboxChange("dimensions", e.target.checked)
+                      }
+                      className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
+                    />
+                    <span className="text-sm text-white/80">Dimensions</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.hasWeight}
+                      onChange={(e) =>
+                        handleCheckboxChange("weight", e.target.checked)
+                      }
+                      className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
+                    />
+                    <span className="text-sm text-white/80">Weight</span>
+                  </label>
+                </div>
+              </div>
             </div>
             <form onSubmit={handleEdit} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -1074,6 +1264,7 @@ function ProductsInner() {
                   <label className="text-xs text-white/60">Name</label>
                   <input
                     className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1 capitalize"
+                    placeholder="Enter Product Name"
                     value={form.product_name}
                     onChange={(e) =>
                       setForm({
@@ -1130,66 +1321,78 @@ function ProductsInner() {
                     categories={categories}
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-white/60">Length</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={form.length}
-                    onChange={(e) =>
-                      setForm({ ...form, length: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-white/60">Width</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={form.width}
-                    onChange={(e) =>
-                      setForm({ ...form, width: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-white/60">Thickness</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={form.thickness}
-                    onChange={(e) =>
-                      setForm({ ...form, thickness: e.target.value })
-                    }
-                  />
-                </div>
+                {form.hasDimensions && (
+                  <>
+                    <div>
+                      <label className="text-xs text-white/60">Length</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                        placeholder="Enter size in ft/inches"
+                        value={form.length}
+                        onChange={(e) =>
+                          setForm({ ...form, length: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/60">Width</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                        placeholder="Enter size in ft/inches"
+                        value={form.width}
+                        onChange={(e) =>
+                          setForm({ ...form, width: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/60">Thickness</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                        placeholder="Enter in mm"
+                        value={form.thickness}
+                        onChange={(e) =>
+                          setForm({ ...form, thickness: e.target.value })
+                        }
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="text-xs text-white/60">Quantity</label>
                   <input
                     type="number"
                     className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                    placeholder="Enter Quantity (e.g:25)"
                     value={form.quantity}
                     onChange={(e) =>
                       setForm({ ...form, quantity: e.target.value })
                     }
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-white/60">Weight</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={form.weight}
-                    onChange={(e) =>
-                      setForm({ ...form, weight: e.target.value })
-                    }
-                  />
-                </div>
+                {form.hasWeight && (
+                  <div>
+                    <label className="text-xs text-white/60">Weight</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                      placeholder="Enter in kg/grams"
+                      value={form.weight}
+                      onChange={(e) =>
+                        setForm({ ...form, weight: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
               </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"

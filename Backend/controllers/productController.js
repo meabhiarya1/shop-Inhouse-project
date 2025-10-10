@@ -723,7 +723,7 @@ class ProductController {
   // Search products by query string
   static async searchProducts(req, res) {
     try {
-      const { q, page = 1, limit = 10 } = req.query;
+      const { q, page = 1, limit = 50, shop_id } = req.query;
 
       // Validate search query
       if (!q || q.trim().length === 0) {
@@ -738,20 +738,54 @@ class ProductController {
       const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10))); // Max 100 per page
       const offset = (pageNum - 1) * limitNum;
 
-      // Build search query - search across multiple fields
-      const searchTerm = q.trim().toLowerCase();
-      const where = {
-        [Op.or]: [
-          { product_name: { [Op.like]: `%${searchTerm}%` } },
-          { "$brand.brand_name$": { [Op.like]: `%${searchTerm}%` } },
-          { "$shop.shop_name$": { [Op.like]: `%${searchTerm}%` } },
-          { "$category.category_name$": { [Op.like]: `%${searchTerm}%` } },
-        ],
-      };
+      // Build where clause
+      const where = {};
+      let shop = null;
 
-      // Get products with pagination and total count
+      // Add shop filter if shop_id is provided and not 'all'
+      if (shop_id && String(shop_id).toLowerCase() !== "all") {
+        // Check if shop exists
+        shop = await Shop.findByPk(shop_id);
+        if (!shop) {
+          return res.status(404).json({
+            success: false,
+            message: "Shop not found",
+          });
+        }
+        where.shop_id = shop_id;
+      }
+
+      // Add search query - search across multiple fields
+      const searchTerm = q.trim().toLowerCase();
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        {
+          [Op.or]: [
+            { product_name: { [Op.like]: `%${searchTerm}%` } },
+            { "$brand.brand_name$": { [Op.like]: `%${searchTerm}%` } },
+            { "$shop.shop_name$": { [Op.like]: `%${searchTerm}%` } },
+            { "$category.category_name$": { [Op.like]: `%${searchTerm}%` } },
+          ],
+        },
+      ];
+
+      // Get products with pagination and total count - includes all product fields
       const { count, rows: products } = await Product.findAndCountAll({
         where,
+        attributes: [
+          'id', 
+          'product_name', 
+          'length', 
+          'width', 
+          'thickness', 
+          'quantity', 
+          'weight', 
+          'brand_id', 
+          'shop_id', 
+          'category_id',
+          'createdAt',
+          'updatedAt'
+        ],
         include: [
           {
             model: Brand,
@@ -787,6 +821,7 @@ class ProductController {
       res.status(200).json({
         success: true,
         data: {
+          shop: shop,
           products: products,
           totalProducts: count,
           searchQuery: q,
