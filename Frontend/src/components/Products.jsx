@@ -13,6 +13,16 @@ import {
   Info,
   CheckSquare,
   Square,
+  Package,
+  Tag,
+  Store,
+  Layers3,
+  Weight,
+  Ruler,
+  Hash,
+  Grid3X3,
+  List,
+  ShoppingCart,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -25,6 +35,9 @@ import {
 import PeriodSelect from "./navbar/PeriodSelect.jsx";
 import ShopDropdown from "./navbar/ShopDropdown.jsx";
 import AvatarDropdown from "./navbar/AvatarDropdown.jsx";
+import CartIcon from "./navbar/CartIcon.jsx";
+import CartModal from "./CartModal.jsx";
+import { CartProvider, useCart } from "../context/CartContext.jsx";
 
 // BrandDropdown Component
 function BrandDropdown({
@@ -204,6 +217,7 @@ function CategoryDropdown({
 
 function ProductsInner() {
   const { selectedShop, period, shops } = useDashboard();
+  const { addToCart } = useCart();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [brands, setBrands] = useState([]); // Store all brands
@@ -215,7 +229,7 @@ function ProductsInner() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({
     currentPage: 1,
-    limit: 10,
+    limit: 12,
     total: 0,
     totalPages: 0,
     hasNextPage: false,
@@ -231,6 +245,8 @@ function ProductsInner() {
   const [activeProduct, setActiveProduct] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [viewMode, setViewMode] = useState("grid"); // "grid" or "list"
+  const [addingToCart, setAddingToCart] = useState({}); // Track which items are being added to cart
   const searchTimeoutRef = useRef(null);
 
   const [form, setForm] = useState({
@@ -256,31 +272,75 @@ function ProductsInner() {
 
       if (checkboxType === "dimensions") {
         newForm.hasDimensions = checked;
-        // If unchecking dimensions, set values to 0
+        // If unchecking dimensions in edit mode, handle different scenarios
         if (!checked) {
-          newForm.length = 0;
-          newForm.width = 0;
-          newForm.thickness = 0;
+          // For edit mode: if the original product had no dimensions, clear values
+          // For create mode: always clear when unchecking
+          if (!activeProduct || 
+              (!activeProduct.length && !activeProduct.width && !activeProduct.thickness)) {
+            newForm.length = "";
+            newForm.width = "";
+            newForm.thickness = "";
+          } else {
+            // Product originally had dimensions but user is unchecking
+            // Set to 0 to indicate user wants to remove dimensions
+            newForm.length = 0;
+            newForm.width = 0;
+            newForm.thickness = 0;
+          }
+        } else {
+          // When checking dimensions, restore original values if they exist
+          if (activeProduct) {
+            newForm.length = activeProduct.length ?? "";
+            newForm.width = activeProduct.width ?? "";
+            newForm.thickness = activeProduct.thickness ?? "";
+          }
         }
       } else if (checkboxType === "weight") {
         newForm.hasWeight = checked;
-        // If unchecking weight, set value to 0
+        // If unchecking weight in edit mode, handle different scenarios
         if (!checked) {
-          newForm.weight = 0;
+          // For edit mode: if the original product had no weight, clear value
+          // For create mode: always clear when unchecking
+          if (!activeProduct || !activeProduct.weight) {
+            newForm.weight = "";
+          } else {
+            // Product originally had weight but user is unchecking
+            // Set to 0 to indicate user wants to remove weight
+            newForm.weight = 0;
+          }
+        } else {
+          // When checking weight, restore original value if it exists
+          if (activeProduct) {
+            newForm.weight = activeProduct.weight ?? "";
+          }
         }
       }
 
-      // Prevent unchecking both checkboxes
+      // Prevent unchecking both checkboxes - at least one must be selected
       if (!newForm.hasDimensions && !newForm.hasWeight) {
+        // Show user feedback about the requirement
+        toast.warning("At least one option (Dimensions or Weight) must be selected");
+        
         // If trying to uncheck the last checked box, prevent it
         if (checkboxType === "dimensions" && prevForm.hasWeight) {
           newForm.hasDimensions = true; // Keep dimensions checked
+          // Restore previous dimension values
           newForm.length = prevForm.length;
           newForm.width = prevForm.width;
           newForm.thickness = prevForm.thickness;
         } else if (checkboxType === "weight" && prevForm.hasDimensions) {
           newForm.hasWeight = true; // Keep weight checked
+          // Restore previous weight value
           newForm.weight = prevForm.weight;
+        } else {
+          // Edge case: default to dimensions if somehow both were unchecked
+          newForm.hasDimensions = true;
+          if (activeProduct) {
+            newForm.length = activeProduct.length ?? "";
+            newForm.width = activeProduct.width ?? "";
+            newForm.thickness = activeProduct.thickness ?? "";
+          }
         }
       }
 
@@ -330,7 +390,7 @@ function ProductsInner() {
         const params = {
           period,
           page,
-          limit: 10,
+          limit: 12,
         };
         // Prefer shop-specific endpoint for clarity; supports 'all'
         const url = `/api/products/shop/${selectedShop || "all"}`;
@@ -360,7 +420,7 @@ function ProductsInner() {
           const totalPages = Math.ceil(totalProducts / 10);
           setPagination({
             currentPage: page,
-            limit: 10,
+            limit: 12,
             total: totalProducts,
             totalPages: totalPages,
             hasNextPage: page < totalPages,
@@ -391,7 +451,7 @@ function ProductsInner() {
         const params = {
           q: query.trim(),
           page,
-          limit: 10,
+          limit: 12,
         };
         const { data } = await axios.get("/api/products/search", {
           params,
@@ -413,7 +473,7 @@ function ProductsInner() {
           const totalPages = Math.ceil(totalProducts / 10);
           setPagination({
             currentPage: page,
-            limit: 10,
+            limit: 12,
             total: totalProducts,
             totalPages: totalPages,
             hasNextPage: page < totalPages,
@@ -554,6 +614,24 @@ function ProductsInner() {
 
   const openEdit = (prod) => {
     setActiveProduct(prod);
+    
+    // Determine initial checkbox states based on product data
+    const hasValidDimensions = !!(
+      (prod.length && prod.length > 0) || 
+      (prod.width && prod.width > 0) || 
+      (prod.thickness && prod.thickness > 0)
+    );
+    const hasValidWeight = !!(prod.weight && prod.weight > 0);
+    
+    // Handle edge case: if product has neither dimensions nor weight, default to dimensions
+    let initialHasDimensions = hasValidDimensions;
+    let initialHasWeight = hasValidWeight;
+    
+    // Ensure at least one checkbox is checked
+    if (!hasValidDimensions && !hasValidWeight) {
+      initialHasDimensions = true; // Default to dimensions if both are empty
+    }
+    
     setForm({
       product_name: prod.product_name || "",
       length: prod.length ?? "",
@@ -566,8 +644,8 @@ function ProductsInner() {
       category_name: prod.category?.category_name ?? prod.category_name ?? "",
       category_id: prod.category?.id ?? prod.category_id ?? "",
       brand_id: prod.brand?.id ?? prod.brand_id ?? "",
-      hasDimensions: !!(prod.length || prod.width || prod.thickness),
-      hasWeight: !!prod.weight,
+      hasDimensions: initialHasDimensions,
+      hasWeight: initialHasWeight,
     });
     setEditOpen(true);
   };
@@ -575,36 +653,69 @@ function ProductsInner() {
   const handleEdit = async (e) => {
     e.preventDefault();
 
-    // Validation
+    // Enhanced validation for edit mode
     const errors = [];
 
     // Always required fields
-    if (!form.product_name.trim()) errors.push("Product name is required");
-    if (!form.quantity || form.quantity === "")
-      errors.push("Quantity is required");
-    if (!form.brand_name.trim()) errors.push("Brand name is required");
-    if (!form.category_name.trim()) errors.push("Category name is required");
+    if (!form.product_name.trim()) {
+      errors.push("Product name is required");
+    }
+    
+    if (!form.quantity || form.quantity === "" || Number(form.quantity) < 0) {
+      errors.push("Valid quantity is required");
+    }
+    
+    if (!form.brand_name.trim()) {
+      errors.push("Brand name is required");
+    }
+    
+    if (!form.category_name.trim()) {
+      errors.push("Category name is required");
+    }
+
+    if (!form.shop_id) {
+      errors.push("Shop selection is required");
+    }
 
     // At least one checkbox must be checked
     if (!form.hasDimensions && !form.hasWeight) {
-      errors.push(
-        "At least one option (Dimensions or Weight) must be selected"
-      );
+      errors.push("At least one option (Dimensions or Weight) must be selected");
     }
 
-    // Conditional validation based on checkboxes
+    // Enhanced conditional validation based on checkboxes
     if (form.hasDimensions) {
-      if (!form.length || form.length === "")
-        errors.push("Length is required when Dimensions is checked");
-      if (!form.width || form.width === "")
-        errors.push("Width is required when Dimensions is checked");
-      if (!form.thickness || form.thickness === "")
-        errors.push("Thickness is required when Dimensions is checked");
+      // Check if all dimension fields are provided and valid
+      const lengthVal = Number(form.length);
+      const widthVal = Number(form.width);
+      const thicknessVal = Number(form.thickness);
+      
+      if (!form.length || form.length === "" || lengthVal <= 0) {
+        errors.push("Valid length is required when Dimensions is checked");
+      }
+      if (!form.width || form.width === "" || widthVal <= 0) {
+        errors.push("Valid width is required when Dimensions is checked");
+      }
+      if (!form.thickness || form.thickness === "" || thicknessVal <= 0) {
+        errors.push("Valid thickness is required when Dimensions is checked");
+      }
     }
 
     if (form.hasWeight) {
-      if (!form.weight || form.weight === "")
-        errors.push("Weight is required when Weight is checked");
+      const weightVal = Number(form.weight);
+      if (!form.weight || form.weight === "" || weightVal <= 0) {
+        errors.push("Valid weight is required when Weight is checked");
+      }
+    }
+
+    // Additional validation: Check if user is trying to remove both dimensions and weight
+    const originalHadDimensions = !!(activeProduct.length || activeProduct.width || activeProduct.thickness);
+    const originalHadWeight = !!activeProduct.weight;
+    
+    if (originalHadDimensions && originalHadWeight) {
+      // Product originally had both, user can choose to keep one or both
+      if (!form.hasDimensions && !form.hasWeight) {
+        errors.push("Cannot remove both dimensions and weight from an existing product");
+      }
     }
 
     // Show validation errors
@@ -728,6 +839,37 @@ function ProductsInner() {
     }
   };
 
+  // Cart functionality
+  
+  const handleAddToCart = async (product) => {
+    try {
+      // Set loading state for this specific product
+      setAddingToCart(prev => ({ ...prev, [product.id]: true }));
+      
+      // Add product to cart context
+      addToCart({
+        id: product.id,
+        product_name: product.product_name,
+        brand: product.Brand?.brand_name || 'Unknown',
+        category: product.Category?.category_name || 'Uncategorized',
+        shop: product.Shop?.shop_name || 'Unknown Shop',
+        dimensions: product.dimensions || 'N/A',
+        weight: product.weight || 'N/A',
+        quantity: product.quantity // Include the backend quantity for stock validation
+      });
+      
+      // Brief loading state for better UX
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+    } catch (error) {
+      toast.error("Failed to add item to cart. Please try again.");
+      console.error("Error adding to cart:", error);
+    } finally {
+      // Clear loading state
+      setAddingToCart(prev => ({ ...prev, [product.id]: false }));
+    }
+  };
+
   return (
     <div className="w-full min-h-screen bg-[#0a0f1e] flex items-stretch justify-center relative overflow-hidden">
       <div className="w-full max-w-7xl mx-4 my-6 bg-[#0f1535] rounded-3xl shadow-2xl overflow-hidden flex max-[500px]:mx-2 max-[500px]:my-3">
@@ -764,6 +906,7 @@ function ProductsInner() {
             <div className="flex items-center space-x-4 max-[500px]:space-x-2">
               <PeriodSelect />
               <ShopDropdown />
+              <CartIcon />
               <AvatarDropdown />
             </div>
           </div>
@@ -802,9 +945,35 @@ function ProductsInner() {
 
                 {/* Right side - Action buttons */}
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* View Toggle */}
+                  <div className="hidden sm:flex items-center bg-white/10 rounded-lg p-1">
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      className={`p-2 rounded-md transition-all ${
+                        viewMode === "grid"
+                          ? "bg-indigo-600 text-white"
+                          : "text-white/60 hover:text-white hover:bg-white/10"
+                      }`}
+                      title="Grid View"
+                    >
+                      <Grid3X3 size={16} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={`p-2 rounded-md transition-all ${
+                        viewMode === "list"
+                          ? "bg-indigo-600 text-white"
+                          : "text-white/60 hover:text-white hover:bg-white/10"
+                      }`}
+                      title="List View"
+                    >
+                      <List size={16} />
+                    </button>
+                  </div>
+
                   <button
                     onClick={openCreate}
-                    className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap"
+                    className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all"
                   >
                     <Plus size={16} />
                     <span className="hidden sm:inline">Create Product</span>
@@ -847,139 +1016,346 @@ function ProductsInner() {
             </div>
 
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] border border-white/10">
-              <div className="overflow-x-auto max-h-[calc(100vh-350px)] overflow-y-auto">
-                <table className="min-w-full text-xs md:text-sm">
-                  <thead className="text-white/70">
-                    <tr>
-                      <th className="text-left p-2 w-8">
-                        <button
-                          onClick={toggleSelectAll}
-                          className={`p-1 rounded-lg border-2 transition-all duration-200 ${
-                            selectedIds.length === products.length &&
-                            products.length > 0
-                              ? "bg-indigo-600 border-indigo-500 text-white"
-                              : "bg-white/5 border-white/20 hover:bg-white/10 hover:border-white/40"
+              {loading || isSearching ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center space-x-3">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/60"></div>
+                    <span className="text-white/70">
+                      {isSearching ? "Searching..." : "Loading..."}
+                    </span>
+                  </div>
+                </div>
+              ) : products.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Package size={48} className="text-white/20 mb-4" />
+                  <p className="text-white/60 text-lg">No products found</p>
+                  <p className="text-white/40 text-sm mt-2">
+                    {searchTerm
+                      ? "Try adjusting your search criteria"
+                      : "Start by creating your first product"}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Select All Header */}
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={toggleSelectAll}
+                        className={`p-2 rounded-lg border-2 transition-all duration-200 ${
+                          selectedIds.length === products.length &&
+                          products.length > 0
+                            ? "bg-indigo-600 border-indigo-500 text-white"
+                            : "bg-white/5 border-white/20 hover:bg-white/10 hover:border-white/40"
+                        }`}
+                      >
+                        {selectedIds.length === products.length &&
+                        products.length > 0 ? (
+                          <CheckSquare size={16} className="text-white" />
+                        ) : selectedIds.length > 0 ? (
+                          <CheckSquare size={16} className="text-indigo-400" />
+                        ) : (
+                          <Square size={16} className="text-white/60" />
+                        )}
+                      </button>
+                      <span className="text-white/70 text-sm">
+                        {selectedIds.length > 0
+                          ? `${selectedIds.length} selected`
+                          : "Select all"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Products Display */}
+                  {viewMode === "grid" ? (
+                    // Grid View
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[calc(100vh-400px)] overflow-y-auto">
+                      {products.map((p) => (
+                        <div
+                          key={p.id}
+                          className={`relative bg-gradient-to-br from-white/5 to-white/10 rounded-xl border border-white/10 p-4 hover:border-white/20 hover:shadow-lg transition-all duration-200 ${
+                            selectedIds.includes(p.id)
+                              ? "ring-2 ring-indigo-500 border-indigo-500/50"
+                              : ""
                           }`}
                         >
-                          {selectedIds.length === products.length &&
-                          products.length > 0 ? (
-                            <CheckSquare size={14} className="text-white" />
-                          ) : selectedIds.length > 0 ? (
-                            <CheckSquare
-                              size={14}
-                              className="text-indigo-400"
-                            />
-                          ) : (
-                            <Square size={14} className="text-white/60" />
-                          )}
-                        </button>
-                      </th>
-                      <th className="text-left p-2">Name</th>
-                      <th className="text-left p-2 hidden md:table-cell">
-                        Brand
-                      </th>
-                      <th className="text-left p-2 hidden md:table-cell">
-                        Shop
-                      </th>
-                      <th className="text-left p-2 hidden md:table-cell">
-                        Category
-                      </th>
-                      <th className="text-right p-2">Qty</th>
-                      <th className="text-left p-2">Size (L×W×T)</th>
-                      <th className="text-left p-2 hidden sm:table-cell">
-                        Weight
-                      </th>
-                      <th className="text-left p-2">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading || isSearching ? (
-                      <tr>
-                        <td className="p-2 text-xs md:text-sm" colSpan={9}>
-                          {isSearching ? "Searching..." : "Loading..."}
-                        </td>
-                      </tr>
-                    ) : products.length === 0 ? (
-                      <tr>
-                        <td className="p-2 text-xs md:text-sm" colSpan={9}>
-                          No products found
-                        </td>
-                      </tr>
-                    ) : (
-                      products.map((p) => (
-                        <tr
-                          key={p.id}
-                          className="border-t border-white/10 hover:bg-white/5"
-                        >
-                          <td className="p-2">
+                          {/* Selection Checkbox */}
+                          <button
+                            onClick={() => toggleSelected(p.id)}
+                            className={`absolute top-3 left-3 p-1 rounded-md border-2 transition-all duration-200 z-10 ${
+                              selectedIds.includes(p.id)
+                                ? "bg-indigo-600 border-indigo-500 text-white"
+                                : "bg-white/10 border-white/20 hover:bg-white/20 hover:border-white/40"
+                            }`}
+                          >
+                            {selectedIds.includes(p.id) ? (
+                              <CheckSquare size={14} className="text-white" />
+                            ) : (
+                              <Square size={14} className="text-white/60" />
+                            )}
+                          </button>
+
+                          {/* Product Icon */}
+                          <div className="flex justify-center mb-3 mt-2">
+                            <div className="w-12 h-12 bg-indigo-600/20 rounded-full flex items-center justify-center">
+                              <Package size={24} className="text-indigo-400" />
+                            </div>
+                          </div>
+
+                          {/* Product Name */}
+                          <h3 className="text-white font-medium text-center text-sm capitalize mb-3 truncate">
+                            {p.product_name}
+                          </h3>
+
+                          {/* Product Details */}
+                          <div className="space-y-2 mb-4">
+                            <div className="flex items-center space-x-2">
+                              <Tag size={14} className="text-white/40" />
+                              <span className="text-white/60 text-xs capitalize">
+                                {p?.brand?.brand_name || "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Store size={14} className="text-white/40" />
+                              <span className="text-white/60 text-xs capitalize">
+                                {p?.shop?.shop_name || "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Layers3 size={14} className="text-white/40" />
+                              <span className="text-white/60 text-xs capitalize">
+                                {p?.category?.category_name || "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Hash size={14} className="text-white/40" />
+                              <span className={`text-xs ${
+                                p.quantity <= 0 
+                                  ? 'text-red-400' 
+                                  : p.quantity <= 5 
+                                    ? 'text-yellow-400' 
+                                    : 'text-white/60'
+                              }`}>
+                                {p.quantity <= 0 ? 'Out of Stock' : `Qty: ${p.quantity}`}
+                              </span>
+                            </div>
+                            {[p.length, p.width, p.thickness].some(v => v != null && v !== "") && (
+                              <div className="flex items-center space-x-2">
+                                <Ruler size={14} className="text-white/40" />
+                                <span className="text-white/60 text-xs">
+                                  {[p.length, p.width, p.thickness]
+                                    .filter((v) => v != null && v !== "")
+                                    .join(" × ")}
+                                </span>
+                              </div>
+                            )}
+                            {p.weight && (
+                              <div className="flex items-center space-x-2">
+                                <Weight size={14} className="text-white/40" />
+                                <span className="text-white/60 text-xs">
+                                  {p.weight}kg
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center justify-center gap-1">
                             <button
-                              onClick={() => toggleSelected(p.id)}
-                              className={`p-1 rounded-lg border-2 transition-all duration-200 ${
+                              className="flex-1 px-2 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all text-xs flex items-center justify-center space-x-1"
+                              onClick={() => openEdit(p)}
+                              title="Edit Product"
+                            >
+                              <Pencil size={12} />
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
+                            <button
+                              className="flex-1 px-2 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all text-xs flex items-center justify-center space-x-1"
+                              onClick={() => {
+                                setActiveProduct(p);
+                                setDetailsOpen(true);
+                              }}
+                              title="View Details"
+                            >
+                              <Info size={12} />
+                              <span className="hidden sm:inline">Info</span>
+                            </button>
+                            <button
+                              className={`flex-1 px-2 py-2 rounded-lg transition-all text-xs flex items-center justify-center space-x-1 border ${
+                                addingToCart[p.id]
+                                  ? "bg-green-600/20 border-green-500/30 text-green-300"
+                                  : p.quantity <= 0
+                                    ? "bg-gray-600/20 border-gray-500/30 text-gray-400 cursor-not-allowed"
+                                    : "bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-indigo-200 border-indigo-500/30"
+                              }`}
+                              onClick={() => handleAddToCart(p)}
+                              disabled={addingToCart[p.id] || p.quantity <= 0}
+                              title={
+                                addingToCart[p.id] 
+                                  ? "Adding to Cart..." 
+                                  : p.quantity <= 0 
+                                    ? "Out of Stock" 
+                                    : "Add to Cart"
+                              }
+                            >
+                              {addingToCart[p.id] ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-300"></div>
+                              ) : (
+                                <ShoppingCart size={12} />
+                              )}
+                              <span className="hidden sm:inline">
+                                {addingToCart[p.id] ? "Adding..." : p.quantity <= 0 ? "Out of Stock" : "Cart"}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    // List View (Table)
+                    <div className="overflow-x-auto max-h-[calc(100vh-400px)] overflow-y-auto">
+                      <table className="min-w-full text-xs md:text-sm">
+                        <thead className="text-white/70 border-b border-white/10">
+                          <tr>
+                            <th className="text-left p-3">
+                              <Square size={14} className="text-white/40" />
+                            </th>
+                            <th className="text-left p-3">Name</th>
+                            <th className="text-left p-3 hidden md:table-cell">
+                              Brand
+                            </th>
+                            <th className="text-left p-3 hidden md:table-cell">
+                              Shop
+                            </th>
+                            <th className="text-left p-3 hidden md:table-cell">
+                              Category
+                            </th>
+                            <th className="text-right p-3">Qty</th>
+                            <th className="text-left p-3">Size (L×W×T)</th>
+                            <th className="text-left p-3 hidden sm:table-cell">
+                              Weight
+                            </th>
+                            <th className="text-left p-3">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {products.map((p) => (
+                            <tr
+                              key={p.id}
+                              className={`border-t border-white/5 hover:bg-white/5 transition-colors ${
                                 selectedIds.includes(p.id)
-                                  ? "bg-indigo-600 border-indigo-500 text-white"
-                                  : "bg-white/5 border-white/20 hover:bg-white/10 hover:border-white/40"
+                                  ? "bg-indigo-600/10"
+                                  : ""
                               }`}
                             >
-                              {selectedIds.includes(p.id) ? (
-                                <CheckSquare size={14} className="text-white" />
-                              ) : (
-                                <Square size={14} className="text-white/60" />
-                              )}
-                            </button>
-                          </td>
-                          <td className="p-2 text-xs md:text-sm capitalize">
-                            {p.product_name}
-                          </td>
-                          <td className="p-2 text-xs md:text-sm hidden md:table-cell capitalize">
-                            {p?.brand?.brand_name || "-"}
-                          </td>
-                          <td className="p-2 text-xs md:text-sm hidden md:table-cell capitalize">
-                            {p?.shop?.shop_name || "-"}
-                          </td>
-                          <td className="p-2 text-xs md:text-sm hidden md:table-cell capitalize">
-                            {p?.category?.category_name || "-"}
-                          </td>
-                          <td className="p-2 text-right text-xs md:text-sm">
-                            {p.quantity}
-                          </td>
-                          <td className="p-2 text-xs md:text-sm">
-                            {[p.length, p.width, p.thickness]
-                              .filter((v) => v != null && v !== "")
-                              .join(" × ")}
-                          </td>
-                          <td className="p-2 text-xs md:text-sm hidden sm:table-cell">
-                            {p.weight ?? "-"}
-                          </td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                                onClick={() => openEdit(p)}
-                                title="Edit"
-                              >
-                                <Pencil size={14} />
-                              </button>
-                              <button
-                                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                                onClick={() => {
-                                  setActiveProduct(p);
-                                  setDetailsOpen(true);
-                                }}
-                                title="Details"
-                              >
-                                <Info size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                              <td className="p-3">
+                                <button
+                                  onClick={() => toggleSelected(p.id)}
+                                  className={`p-1 rounded-lg border-2 transition-all duration-200 ${
+                                    selectedIds.includes(p.id)
+                                      ? "bg-indigo-600 border-indigo-500 text-white"
+                                      : "bg-white/5 border-white/20 hover:bg-white/10 hover:border-white/40"
+                                  }`}
+                                >
+                                  {selectedIds.includes(p.id) ? (
+                                    <CheckSquare size={14} className="text-white" />
+                                  ) : (
+                                    <Square size={14} className="text-white/60" />
+                                  )}
+                                </button>
+                              </td>
+                              <td className="p-3 text-xs md:text-sm">
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center">
+                                    <Package size={14} className="text-indigo-400" />
+                                  </div>
+                                  <span className="capitalize">{p.product_name}</span>
+                                </div>
+                              </td>
+                              <td className="p-3 text-xs md:text-sm hidden md:table-cell capitalize">
+                                {p?.brand?.brand_name || "-"}
+                              </td>
+                              <td className="p-3 text-xs md:text-sm hidden md:table-cell capitalize">
+                                {p?.shop?.shop_name || "-"}
+                              </td>
+                              <td className="p-3 text-xs md:text-sm hidden md:table-cell capitalize">
+                                {p?.category?.category_name || "-"}
+                              </td>
+                              <td className="p-3 text-right text-xs md:text-sm">
+                                <span className={`px-2 py-1 rounded-full ${
+                                  p.quantity <= 0 
+                                    ? 'bg-red-500/20 text-red-400' 
+                                    : p.quantity <= 5 
+                                      ? 'bg-yellow-500/20 text-yellow-400' 
+                                      : 'bg-white/10 text-white'
+                                }`}>
+                                  {p.quantity <= 0 ? 'Out of Stock' : p.quantity}
+                                </span>
+                              </td>
+                              <td className="p-3 text-xs md:text-sm">
+                                {[p.length, p.width, p.thickness]
+                                  .filter((v) => v != null && v !== "")
+                                  .join(" × ")}
+                              </td>
+                              <td className="p-3 text-xs md:text-sm hidden sm:table-cell">
+                                {p.weight ? `${p.weight}kg` : "-"}
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all"
+                                    onClick={() => openEdit(p)}
+                                    title="Edit Product"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all"
+                                    onClick={() => {
+                                      setActiveProduct(p);
+                                      setDetailsOpen(true);
+                                    }}
+                                    title="View Details"
+                                  >
+                                    <Info size={14} />
+                                  </button>
+                                  <button
+                                    className={`px-2 py-1 rounded-lg transition-all border ${
+                                      addingToCart[p.id]
+                                        ? "bg-green-600/20 border-green-500/30 text-green-300"
+                                        : p.quantity <= 0
+                                          ? "bg-gray-600/20 border-gray-500/30 text-gray-400 cursor-not-allowed"
+                                          : "bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-indigo-200 border-indigo-500/30"
+                                    }`}
+                                    onClick={() => handleAddToCart(p)}
+                                    disabled={addingToCart[p.id] || p.quantity <= 0}
+                                    title={
+                                      addingToCart[p.id] 
+                                        ? "Adding to Cart..." 
+                                        : p.quantity <= 0 
+                                          ? "Out of Stock" 
+                                          : "Add to Cart"
+                                    }
+                                  >
+                                    {addingToCart[p.id] ? (
+                                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-300"></div>
+                                    ) : (
+                                      <ShoppingCart size={14} />
+                                    )}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Pagination - Always show if not loading */}
-              {!loading && !isSearching && (
+              {!loading && !isSearching && products.length > 0 && (
                 <div className="mt-6 pt-4 border-t border-white/10">
                   <Pagination
                     currentPage={pagination.currentPage}
@@ -1010,73 +1386,177 @@ function ProductsInner() {
               </div>
             )}
 
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Create Product</h3>
-              <div className="flex flex-col items-end">
-                <button
-                  className="text-white/60"
-                  onClick={() => setCreateOpen(false)}
-                  disabled={createLoading}
-                >
-                  ✕
-                </button>
-                {/* Checkboxes */}
-                <div className="flex gap-4 mt-2">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.hasDimensions}
-                      onChange={(e) =>
-                        handleCheckboxChange("dimensions", e.target.checked)
-                      }
-                      className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
-                    />
-                    <span className="text-sm text-white/80">Dimensions</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.hasWeight}
-                      onChange={(e) =>
-                        handleCheckboxChange("weight", e.target.checked)
-                      }
-                      className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
-                    />
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-lg flex items-center space-x-2">
+                  <Package size={20} className="text-indigo-400" />
+                  <span>Create New Product</span>
+                </h3>
+                <p className="text-xs text-white/60 mt-1">
+                  Add a new product to your inventory. Choose measurement options below.
+                </p>
+              </div>
+              <button
+                className="text-white/60 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
+                onClick={() => setCreateOpen(false)}
+                disabled={createLoading}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Product Measurement Options */}
+            <div className="mb-4 p-3 bg-white/5 rounded-lg border border-white/10">
+              <p className="text-sm text-white/80 mb-3 flex items-center space-x-2">
+                <Info size={16} className="text-blue-400" />
+                <span>Select measurement types for this product:</span>
+              </p>
+              <div className="flex gap-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.hasDimensions}
+                    onChange={(e) =>
+                      handleCheckboxChange("dimensions", e.target.checked)
+                    }
+                    className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
+                  />
+                  <div className="flex items-center space-x-2">
+                    <Ruler size={16} className="text-indigo-400" />
+                    <span className="text-sm text-white/80">Dimensions (L×W×T)</span>
+                  </div>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.hasWeight}
+                    onChange={(e) =>
+                      handleCheckboxChange("weight", e.target.checked)
+                    }
+                    className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
+                  />
+                  <div className="flex items-center space-x-2">
+                    <Weight size={16} className="text-orange-400" />
                     <span className="text-sm text-white/80">Weight</span>
-                  </label>
-                </div>
+                  </div>
+                </label>
+              </div>
+              
+              {/* Status indicator */}
+              <div className="mt-2 text-xs">
+                {form.hasDimensions && form.hasWeight && (
+                  <span className="text-green-400 flex items-center space-x-1">
+                    <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                    <span>Product will include both dimensions and weight</span>
+                  </span>
+                )}
+                {form.hasDimensions && !form.hasWeight && (
+                  <span className="text-blue-400 flex items-center space-x-1">
+                    <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+                    <span>Product will include dimensions only</span>
+                  </span>
+                )}
+                {!form.hasDimensions && form.hasWeight && (
+                  <span className="text-orange-400 flex items-center space-x-1">
+                    <span className="w-2 h-2 bg-orange-400 rounded-full"></span>
+                    <span>Product will include weight only</span>
+                  </span>
+                )}
+                {!form.hasDimensions && !form.hasWeight && (
+                  <span className="text-red-400 flex items-center space-x-1">
+                    <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+                    <span>⚠ Select at least one measurement type</span>
+                  </span>
+                )}
               </div>
             </div>
-            <form onSubmit={handleCreate} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-white/60">Name</label>
-                  <input
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1 capitalize"
-                    placeholder="Enter Product Name"
-                    value={form.product_name}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        product_name: e.target.value.toLowerCase(),
-                      })
-                    }
-                  />
+            <form onSubmit={handleCreate} className="space-y-4">
+              {/* Basic Information Section */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-white/80 flex items-center space-x-2 border-b border-white/10 pb-2">
+                  <Package size={16} className="text-indigo-400" />
+                  <span>Basic Information</span>
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-white/60 flex items-center space-x-1">
+                      <Hash size={12} className="text-white/40" />
+                      <span>Product Name</span>
+                    </label>
+                    <input
+                      className="w-full bg-white/10 border border-white/10 rounded-lg p-2 mt-1 capitalize focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                      placeholder="Enter Product Name"
+                      value={form.product_name}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          product_name: e.target.value.toLowerCase(),
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/60 flex items-center space-x-1">
+                      <Hash size={12} className="text-white/40" />
+                      <span>Quantity</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full bg-white/10 border border-white/10 rounded-lg p-2 mt-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                      placeholder="Enter Quantity (e.g: 25)"
+                      value={form.quantity}
+                      onChange={(e) =>
+                        setForm({ ...form, quantity: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-white/60">Brand Name</label>
-                  <BrandDropdown
-                    value={form.brand_name}
-                    onChange={(name, id) =>
-                      setForm({
-                        ...form,
-                        brand_name: name,
-                        brand_id: id || null,
-                      })
-                    }
-                    placeholder="Select or type brand name"
-                    brands={brands}
-                  />
+              </div>
+
+              {/* Category & Shop Information */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-white/80 flex items-center space-x-2 border-b border-white/10 pb-2">
+                  <Store size={16} className="text-green-400" />
+                  <span>Category & Location</span>
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-white/60 flex items-center space-x-1">
+                      <Tag size={12} className="text-orange-400" />
+                      <span>Brand Name</span>
+                    </label>
+                    <BrandDropdown
+                      value={form.brand_name}
+                      onChange={(name, id) =>
+                        setForm({
+                          ...form,
+                          brand_name: name,
+                          brand_id: id || null,
+                        })
+                      }
+                      placeholder="Select or type brand name"
+                      brands={brands}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/60 flex items-center space-x-1">
+                      <Layers3 size={12} className="text-purple-400" />
+                      <span>Category Name</span>
+                    </label>
+                    <CategoryDropdown
+                      value={form.category_name}
+                      onChange={(name, id) =>
+                        setForm({
+                          ...form,
+                          category_name: name,
+                          category_id: id || null,
+                        })
+                      }
+                      placeholder="Select or type category name"
+                      categories={categories}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs text-white/60">Shop</label>
@@ -1095,97 +1575,125 @@ function ProductsInner() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="text-xs text-white/60">Category Name</label>
-                  <CategoryDropdown
-                    value={form.category_name}
-                    onChange={(name, id) =>
-                      setForm({
-                        ...form,
-                        category_name: name,
-                        category_id: id || null,
-                      })
-                    }
-                    placeholder="Select or type category name"
-                    categories={categories}
-                  />
-                </div>
-                {form.hasDimensions && (
-                  <>
-                    <div>
-                      <label className="text-xs text-white/60">Length</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                        placeholder="Enter size in ft/inches"
-                        value={form.length}
-                        onChange={(e) =>
-                          setForm({ ...form, length: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-white/60">Width</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                        placeholder="Enter size in ft/inches"
-                        value={form.width}
-                        onChange={(e) =>
-                          setForm({ ...form, width: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-white/60">Thickness</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                        placeholder="Enter in mm"
-                        value={form.thickness}
-                        onChange={(e) =>
-                          setForm({ ...form, thickness: e.target.value })
-                        }
-                      />
-                    </div>
-                  </>
-                )}
-                <div>
-                  <label className="text-xs text-white/60">Quantity</label>
-                  <input
-                    type="number"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    placeholder="Enter Quantity (e.g:25)"
-                    value={form.quantity}
-                    onChange={(e) =>
-                      setForm({ ...form, quantity: e.target.value })
-                    }
-                  />
-                </div>
-                {form.hasWeight && (
-                  <div>
-                    <label className="text-xs text-white/60">Weight</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                      placeholder="Enter in kg/grams"
-                      value={form.weight}
-                      onChange={(e) =>
-                        setForm({ ...form, weight: e.target.value })
-                      }
-                    />
-                  </div>
-                )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Measurements Section */}
+              {(form.hasDimensions || form.hasWeight) && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-white/80 flex items-center space-x-2 border-b border-white/10 pb-2">
+                    <Ruler size={16} className="text-yellow-400" />
+                    <span>Product Measurements</span>
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {form.hasDimensions && (
+                      <>
+                        <div>
+                          <label className="text-xs text-white/60 flex items-center space-x-1">
+                            <Ruler size={12} className="text-blue-400" />
+                            <span>Length</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="w-full bg-white/10 border border-white/10 rounded-lg p-2 mt-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                            placeholder="Enter size in ft/inches"
+                            value={form.length}
+                            onChange={(e) =>
+                              setForm({ ...form, length: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-white/60 flex items-center space-x-1">
+                            <Ruler size={12} className="text-blue-400" />
+                            <span>Width</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="w-full bg-white/10 border border-white/10 rounded-lg p-2 mt-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                            placeholder="Enter size in ft/inches"
+                            value={form.width}
+                            onChange={(e) =>
+                              setForm({ ...form, width: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-white/60 flex items-center space-x-1">
+                            <Ruler size={12} className="text-blue-400" />
+                            <span>Thickness</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="w-full bg-white/10 border border-white/10 rounded-lg p-2 mt-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                            placeholder="Enter in mm"
+                            value={form.thickness}
+                            onChange={(e) =>
+                              setForm({ ...form, thickness: e.target.value })
+                            }
+                          />
+                        </div>
+                      </>
+                    )}
+                    {form.hasWeight && (
+                      <div>
+                        <label className="text-xs text-white/60 flex items-center space-x-1">
+                          <Weight size={12} className="text-orange-400" />
+                          <span>Weight</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="w-full bg-white/10 border border-white/10 rounded-lg p-2 mt-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                          placeholder="Enter in kg/grams"
+                          value={form.weight}
+                          onChange={(e) =>
+                            setForm({ ...form, weight: e.target.value })
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Creation Summary */}
+              <div className="mt-4 p-3 bg-white/5 rounded-lg">
+                <h4 className="text-sm font-medium text-white/80 mb-2 flex items-center space-x-2">
+                  <Info size={14} className="text-blue-400" />
+                  <span>Product Summary:</span>
+                </h4>
+                <div className="text-xs text-white/60 space-y-1">
+                  <div>
+                    • {form.hasDimensions ? "✓" : "✗"} Dimensions will be {form.hasDimensions ? "included" : "skipped"}
+                  </div>
+                  <div>
+                    • {form.hasWeight ? "✓" : "✗"} Weight will be {form.hasWeight ? "included" : "skipped"}
+                  </div>
+                  {!form.hasDimensions && !form.hasWeight && (
+                    <div className="text-amber-400 flex items-center space-x-1">
+                      <span>⚠</span>
+                      <span>Please select at least one measurement type above</span>
+                    </div>
+                  )}
+                  {form.hasDimensions && form.hasWeight && (
+                    <div className="text-green-400">
+                      ✨ Complete product with full specifications
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
                 <button
                   type="button"
-                  className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 transition-all"
                   onClick={() => setCreateOpen(false)}
                   disabled={createLoading}
                 >
@@ -1193,13 +1701,14 @@ function ProductsInner() {
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                  disabled={createLoading}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-all"
+                  disabled={createLoading || (!form.hasDimensions && !form.hasWeight)}
                 >
                   {createLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   )}
-                  <span>{createLoading ? "Creating..." : "Create"}</span>
+                  <Plus size={16} />
+                  <span>{createLoading ? "Creating Product..." : "Create Product"}</span>
                 </button>
               </div>
             </form>
@@ -1221,41 +1730,76 @@ function ProductsInner() {
               </div>
             )}
 
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Edit Product</h3>
-              <div className="flex flex-col items-end">
-                <button
-                  className="text-white/60"
-                  onClick={() => setEditOpen(false)}
-                  disabled={editLoading}
-                >
-                  ✕
-                </button>
-                {/* Checkboxes */}
-                <div className="flex gap-4 mt-2">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.hasDimensions}
-                      onChange={(e) =>
-                        handleCheckboxChange("dimensions", e.target.checked)
-                      }
-                      className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
-                    />
-                    <span className="text-sm text-white/80">Dimensions</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.hasWeight}
-                      onChange={(e) =>
-                        handleCheckboxChange("weight", e.target.checked)
-                      }
-                      className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
-                    />
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-lg">Edit Product</h3>
+                <p className="text-xs text-white/60 mt-1">
+                  Modify product details. At least one measurement type is required.
+                </p>
+              </div>
+              <button
+                className="text-white/60 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
+                onClick={() => setEditOpen(false)}
+                disabled={editLoading}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Product Measurement Options */}
+            <div className="mb-4 p-3 bg-white/5 rounded-lg border border-white/10">
+              <p className="text-sm text-white/80 mb-3">Choose measurement options:</p>
+              <div className="flex gap-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.hasDimensions}
+                    onChange={(e) =>
+                      handleCheckboxChange("dimensions", e.target.checked)
+                    }
+                    className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
+                  />
+                  <div className="flex items-center space-x-2">
+                    <Ruler size={16} className="text-indigo-400" />
+                    <span className="text-sm text-white/80">Dimensions (L×W×T)</span>
+                  </div>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.hasWeight}
+                    onChange={(e) =>
+                      handleCheckboxChange("weight", e.target.checked)
+                    }
+                    className="w-4 h-4 text-indigo-600 bg-white/10 border-white/20 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer"
+                  />
+                  <div className="flex items-center space-x-2">
+                    <Weight size={16} className="text-orange-400" />
                     <span className="text-sm text-white/80">Weight</span>
-                  </label>
-                </div>
+                  </div>
+                </label>
+              </div>
+              
+              {/* Status indicator */}
+              <div className="mt-2 text-xs">
+                {form.hasDimensions && form.hasWeight && (
+                  <span className="text-green-400 flex items-center space-x-1">
+                    <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                    <span>Both dimensions and weight will be saved</span>
+                  </span>
+                )}
+                {form.hasDimensions && !form.hasWeight && (
+                  <span className="text-blue-400 flex items-center space-x-1">
+                    <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+                    <span>Only dimensions will be saved</span>
+                  </span>
+                )}
+                {!form.hasDimensions && form.hasWeight && (
+                  <span className="text-orange-400 flex items-center space-x-1">
+                    <span className="w-2 h-2 bg-orange-400 rounded-full"></span>
+                    <span>Only weight will be saved</span>
+                  </span>
+                )}
               </div>
             </div>
             <form onSubmit={handleEdit} className="space-y-3">
@@ -1378,11 +1922,19 @@ function ProductsInner() {
                 </div>
                 {form.hasWeight && (
                   <div>
-                    <label className="text-xs text-white/60">Weight</label>
+                    <label className="text-xs text-white/60 flex items-center justify-between">
+                      <span>Weight</span>
+                      {activeProduct?.weight && (
+                        <span className="text-white/40">
+                          (Original: {activeProduct.weight}kg)
+                        </span>
+                      )}
+                    </label>
                     <input
                       type="number"
                       step="0.01"
-                      className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
+                      min="0"
+                      className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       placeholder="Enter in kg/grams"
                       value={form.weight}
                       onChange={(e) =>
@@ -1393,10 +1945,28 @@ function ProductsInner() {
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Additional Info Section */}
+              <div className="mt-4 p-3 bg-white/5 rounded-lg">
+                <h4 className="text-sm font-medium text-white/80 mb-2">Edit Summary:</h4>
+                <div className="text-xs text-white/60 space-y-1">
+                  <div>
+                    • {form.hasDimensions ? "✓" : "✗"} Dimensions will be {form.hasDimensions ? "saved" : "removed"}
+                  </div>
+                  <div>
+                    • {form.hasWeight ? "✓" : "✗"} Weight will be {form.hasWeight ? "saved" : "removed"}
+                  </div>
+                  {!form.hasDimensions && !form.hasWeight && (
+                    <div className="text-amber-400">
+                      ⚠ At least one measurement type must be selected
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
                 <button
                   type="button"
-                  className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 transition-all"
                   onClick={() => setEditOpen(false)}
                   disabled={editLoading}
                 >
@@ -1404,13 +1974,14 @@ function ProductsInner() {
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                  disabled={editLoading}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-all"
+                  disabled={editLoading || (!form.hasDimensions && !form.hasWeight)}
                 >
                   {editLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   )}
-                  <span>{editLoading ? "Updating..." : "Update"}</span>
+                  <Pencil size={16} />
+                  <span>{editLoading ? "Updating Product..." : "Update Product"}</span>
                 </button>
               </div>
             </form>
@@ -1421,60 +1992,146 @@ function ProductsInner() {
       {/* Details Modal */}
       {detailsOpen && activeProduct && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
-          <div className="w-full max-w-xl bg-[#0f1535] text-white rounded-2xl border border-white/10 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Product Details</h3>
+          <div className="w-full max-w-xl bg-[#0f1535] text-white rounded-2xl border border-white/10 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-indigo-600/20 rounded-full flex items-center justify-center">
+                  <Package size={20} className="text-indigo-400" />
+                </div>
+                <h3 className="font-semibold text-lg">Product Details</h3>
+              </div>
               <button
-                className="text-white/60"
+                className="text-white/60 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
                 onClick={() => setDetailsOpen(false)}
               >
                 ✕
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-white/60">Name</p>
-                <p className="capitalize">{activeProduct?.product_name}</p>
+            
+            <div className="space-y-4">
+              {/* Product Name */}
+              <div className="bg-white/5 rounded-lg p-4">
+                <div className="flex items-center space-x-3">
+                  <Package size={18} className="text-indigo-400" />
+                  <div>
+                    <p className="text-white/60 text-sm">Product Name</p>
+                    <p className="text-white font-medium capitalize text-lg">
+                      {activeProduct?.product_name}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-white/60">Brand</p>
-                <p className="capitalize">
-                  {activeProduct?.brand?.brand_name ||
-                    activeProduct?.brand_name}
-                </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Brand */}
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="flex items-center space-x-3">
+                    <Tag size={16} className="text-orange-400" />
+                    <div>
+                      <p className="text-white/60 text-sm">Brand</p>
+                      <p className="text-white capitalize">
+                        {activeProduct?.brand?.brand_name ||
+                          activeProduct?.brand_name || "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Shop */}
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="flex items-center space-x-3">
+                    <Store size={16} className="text-green-400" />
+                    <div>
+                      <p className="text-white/60 text-sm">Shop</p>
+                      <p className="text-white capitalize">
+                        {activeProduct?.shop?.shop_name || activeProduct?.shop_id || "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Category */}
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="flex items-center space-x-3">
+                    <Layers3 size={16} className="text-purple-400" />
+                    <div>
+                      <p className="text-white/60 text-sm">Category</p>
+                      <p className="text-white capitalize">
+                        {activeProduct?.category?.category_name ||
+                          activeProduct?.category_id || "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quantity */}
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="flex items-center space-x-3">
+                    <Hash size={16} className="text-blue-400" />
+                    <div>
+                      <p className="text-white/60 text-sm">Quantity</p>
+                      <p className="text-white font-medium text-lg">
+                        {activeProduct?.quantity}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dimensions */}
+                {[activeProduct?.length, activeProduct?.width, activeProduct?.thickness].some(v => v != null && v !== "") && (
+                  <div className="bg-white/5 rounded-lg p-4">
+                    <div className="flex items-center space-x-3">
+                      <Ruler size={16} className="text-yellow-400" />
+                      <div>
+                        <p className="text-white/60 text-sm">Dimensions (L×W×T)</p>
+                        <p className="text-white font-medium">
+                          {[
+                            activeProduct?.length,
+                            activeProduct?.width,
+                            activeProduct?.thickness,
+                          ]
+                            .filter(v => v != null && v !== "")
+                            .join(" × ")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Weight */}
+                {activeProduct?.weight && (
+                  <div className="bg-white/5 rounded-lg p-4">
+                    <div className="flex items-center space-x-3">
+                      <Weight size={16} className="text-red-400" />
+                      <div>
+                        <p className="text-white/60 text-sm">Weight</p>
+                        <p className="text-white font-medium">
+                          {activeProduct?.weight}kg
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div>
-                <p className="text-white/60">Shop</p>
-                <p className="capitalize">
-                  {activeProduct?.shop?.shop_name || activeProduct?.shop_id}
-                </p>
-              </div>
-              <div>
-                <p className="text-white/60">Category</p>
-                <p className="capitalize">
-                  {activeProduct?.category?.category_name ||
-                    activeProduct?.category_id}
-                </p>
-              </div>
-              <div>
-                <p className="text-white/60">Quantity</p>
-                <p>{activeProduct?.quantity}</p>
-              </div>
-              <div>
-                <p className="text-white/60">Size</p>
-                <p>
-                  {[
-                    activeProduct?.length,
-                    activeProduct?.width,
-                    activeProduct?.thickness,
-                  ]
-                    .filter(Boolean)
-                    .join(" × ")}
-                </p>
-              </div>
-              <div>
-                <p className="text-white/60">Weight</p>
-                <p>{activeProduct?.weight ?? "-"}</p>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-white/10">
+                <button
+                  onClick={() => {
+                    setDetailsOpen(false);
+                    openEdit(activeProduct);
+                  }}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-all flex items-center justify-center space-x-2"
+                >
+                  <Pencil size={16} />
+                  <span>Edit Product</span>
+                </button>
+                <button
+                  onClick={() => setDetailsOpen(false)}
+                  className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
@@ -1487,7 +2144,10 @@ function ProductsInner() {
 export default function Products() {
   return (
     <DashboardProvider>
-      <ProductsInner />
+      <CartProvider>
+        <ProductsInner />
+        <CartModal />
+      </CartProvider>
     </DashboardProvider>
   );
 }
