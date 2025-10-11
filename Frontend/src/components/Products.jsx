@@ -36,8 +36,7 @@ import PeriodSelect from "./navbar/PeriodSelect.jsx";
 import ShopDropdown from "./navbar/ShopDropdown.jsx";
 import AvatarDropdown from "./navbar/AvatarDropdown.jsx";
 import CartIcon from "./navbar/CartIcon.jsx";
-import CartModal from "./CartModal.jsx";
-import { CartProvider, useCart } from "../context/CartContext.jsx";
+import { useCart } from "../context/CartContext.jsx";
 
 // BrandDropdown Component
 function BrandDropdown({
@@ -853,8 +852,10 @@ function ProductsInner() {
         brand: product.Brand?.brand_name || 'Unknown',
         category: product.Category?.category_name || 'Uncategorized',
         shop: product.Shop?.shop_name || 'Unknown Shop',
-        dimensions: product.dimensions || 'N/A',
-        weight: product.weight || 'N/A',
+        length: product.length,
+        width: product.width,
+        thickness: product.thickness,
+        weight: product.weight,
         quantity: product.quantity // Include the backend quantity for stock validation
       });
       
@@ -1139,24 +1140,28 @@ function ProductsInner() {
                                 {p.quantity <= 0 ? 'Out of Stock' : `Qty: ${p.quantity}`}
                               </span>
                             </div>
-                            {[p.length, p.width, p.thickness].some(v => v != null && v !== "") && (
-                              <div className="flex items-center space-x-2">
-                                <Ruler size={14} className="text-white/40" />
+                            <div className="flex items-center space-x-2">
+                              <Ruler size={14} className="text-white/40" />
+                              <div className="flex flex-col">
                                 <span className="text-white/60 text-xs">
-                                  {[p.length, p.width, p.thickness]
-                                    .filter((v) => v != null && v !== "")
-                                    .join(" × ")}
+                                  {[p.length, p.width].some(v => v != null && v !== "") 
+                                    ? [p.length, p.width]
+                                        .filter((v) => v != null && v !== "")
+                                        .join(" × ") + " ft."
+                                    : "0 × 0ft"
+                                  }
+                                </span>
+                                <span className="text-white/50 text-xs">
+                                  {p.thickness && p.thickness !== "" ? `${p.thickness} mm` : "0 mm"}
                                 </span>
                               </div>
-                            )}
-                            {p.weight && (
-                              <div className="flex items-center space-x-2">
-                                <Weight size={14} className="text-white/40" />
-                                <span className="text-white/60 text-xs">
-                                  {p.weight}kg
-                                </span>
-                              </div>
-                            )}
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Weight size={14} className="text-white/40" />
+                              <span className="text-white/60 text-xs">
+                                {p.weight ? `${p.weight} kg` : "0 kg"}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Action Buttons */}
@@ -1293,12 +1298,22 @@ function ProductsInner() {
                                 </span>
                               </td>
                               <td className="p-3 text-xs md:text-sm">
-                                {[p.length, p.width, p.thickness]
-                                  .filter((v) => v != null && v !== "")
-                                  .join(" × ")}
+                                <div className="flex flex-col space-y-1">
+                                  <span>
+                                    {[p.length, p.width].some(v => v != null && v !== "")
+                                      ? [p.length, p.width]
+                                          .filter((v) => v != null && v !== "")
+                                          .join(" × ") + "ft"
+                                      : "0 × 0ft"
+                                    }
+                                  </span>
+                                  <span className="text-white/60">
+                                    {p.thickness && p.thickness !== "" ? `${p.thickness}mm` : "0mm"}
+                                  </span>
+                                </div>
                               </td>
                               <td className="p-3 text-xs md:text-sm hidden sm:table-cell">
-                                {p.weight ? `${p.weight}kg` : "-"}
+                                {p.weight ? `${p.weight}kg` : "0kg"}
                               </td>
                               <td className="p-3">
                                 <div className="flex items-center gap-1">
@@ -2144,10 +2159,7 @@ function ProductsInner() {
 export default function Products() {
   return (
     <DashboardProvider>
-      <CartProvider>
-        <ProductsInner />
-        <CartModal />
-      </CartProvider>
+      <ProductsInner />
     </DashboardProvider>
   );
 }

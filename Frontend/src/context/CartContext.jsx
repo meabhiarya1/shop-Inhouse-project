@@ -31,9 +31,13 @@ const cartReducer = (state, action) => {
           brand: product.brand?.brand_name || 'Unknown Brand',
           shop: product.shop?.shop_name || 'Unknown Shop',
           category: product.category?.category_name || 'Unknown Category',
-          dimensions: [product.length, product.width, product.thickness]
-            .filter(v => v != null && v !== "")
-            .join(" × ") || 'N/A',
+          dimensions: (() => {
+            const parts = [];
+            if (product.length && product.length !== "") parts.push(`${product.length}ft`);
+            if (product.width && product.width !== "") parts.push(`${product.width}ft`);
+            if (product.thickness && product.thickness !== "") parts.push(`${product.thickness}mm`);
+            return parts.length > 0 ? parts.join(" × ") : 'N/A';
+          })(),
           weight: product.weight ? `${product.weight}kg` : 'N/A',
           quantity: quantity,
           maxStock: product.quantity || 0, // Store available stock from backend

@@ -426,49 +426,103 @@ class ProductController {
         });
       }
 
-      const product = await Product.create(
-        {
+      // Check if product with same attributes already exists
+      const existingProduct = await Product.findOne({
+        where: {
           product_name: product_name.trim().toLowerCase(),
-          length,
-          width,
+          length: length,
+          width: width,
           thickness: thickness || null,
-          quantity,
           weight: weight || null,
           brand_id: finalBrandId,
-          shop_id,
+          shop_id: shop_id,
           category_id: finalCategoryId,
         },
-        { transaction }
-      );
-
-      // Fetch the created product with associations
-      const createdProduct = await Product.findByPk(product.id, {
-        include: [
-          {
-            model: Brand,
-            as: "brand",
-            attributes: ["id", "brand_name"],
-          },
-          {
-            model: Shop,
-            as: "shop",
-            attributes: ["id", "shop_name"],
-          },
-          {
-            model: Category,
-            as: "category",
-            attributes: ["id", "category_name"],
-          },
-        ],
         transaction,
       });
 
+      let resultProduct;
+      let isUpdated = false;
+
+      if (existingProduct) {
+        // Product exists, update quantity
+        const newQuantity = existingProduct.quantity + parseInt(quantity);
+        await existingProduct.update(
+          { quantity: newQuantity },
+          { transaction }
+        );
+
+        // Fetch the updated product with associations
+        resultProduct = await Product.findByPk(existingProduct.id, {
+          include: [
+            {
+              model: Brand,
+              as: "brand",
+              attributes: ["id", "brand_name"],
+            },
+            {
+              model: Shop,
+              as: "shop",
+              attributes: ["id", "shop_name"],
+            },
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "category_name"],
+            },
+          ],
+          transaction,
+        });
+        isUpdated = true;
+      } else {
+        // Create new product
+        const product = await Product.create(
+          {
+            product_name: product_name.trim().toLowerCase(),
+            length,
+            width,
+            thickness: thickness || null,
+            quantity,
+            weight: weight || null,
+            brand_id: finalBrandId,
+            shop_id,
+            category_id: finalCategoryId,
+          },
+          { transaction }
+        );
+
+        // Fetch the created product with associations
+        resultProduct = await Product.findByPk(product.id, {
+          include: [
+            {
+              model: Brand,
+              as: "brand",
+              attributes: ["id", "brand_name"],
+            },
+            {
+              model: Shop,
+              as: "shop",
+              attributes: ["id", "shop_name"],
+            },
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "category_name"],
+            },
+          ],
+          transaction,
+        });
+      }
+
       await transaction.commit();
 
-      res.status(201).json({
+      res.status(isUpdated ? 200 : 201).json({
         success: true,
-        message: "Product created successfully",
-        data: createdProduct,
+        message: isUpdated 
+          ? `Product quantity updated successfully. New quantity: ${resultProduct.quantity}` 
+          : "Product created successfully",
+        data: resultProduct,
+        action: isUpdated ? "updated" : "created",
       });
     } catch (error) {
       await transaction.rollback();

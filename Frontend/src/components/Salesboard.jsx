@@ -1,5 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Menu, Plus, Pencil, Trash2, Info } from "lucide-react";
+import { 
+  Menu, 
+  Plus, 
+  Pencil, 
+  Trash2, 
+  Info,
+  Grid3X3,
+  List,
+  ShoppingCart,
+  DollarSign,
+  Calendar,
+  Package,
+  Store,
+  User,
+  CreditCard,
+  Search,
+  Phone
+} from "lucide-react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import {
@@ -9,20 +26,28 @@ import {
 import PeriodSelect from "./navbar/PeriodSelect.jsx";
 import ShopDropdown from "./navbar/ShopDropdown.jsx";
 import AvatarDropdown from "./navbar/AvatarDropdown.jsx";
+import CartIcon from "./navbar/CartIcon.jsx";
 import Sidebar from "./Sidebar.jsx";
+import Pagination from "./Pagination.jsx";
 import { useLocation } from "react-router-dom";
 
 function SalesboardInner() {
   const { selectedShop, period, shops } = useDashboard();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sales, setSales] = useState([]);
+  const [totalSales, setTotalSales] = useState(0);
   const [pagination, setPagination] = useState({
     current_page: 1,
-    per_page: 20,
+    per_page: 12,
     total_pages: 1,
   });
   const [loading, setLoading] = useState(true);
   const location = useLocation();
+  
+  // View mode and search state
+  const [viewMode, setViewMode] = useState("grid"); // "grid" or "list"
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
   // Data for forms/modals
   const [createOpen, setCreateOpen] = useState(false);
@@ -159,14 +184,15 @@ function SalesboardInner() {
   const loadSales = async (page = 1) => {
     setLoading(true);
     try {
-      const params = { page, limit: pagination.per_page || 20, period };
+      const params = { page, limit: 12, period };
       if (selectedShop) params.shop_id = selectedShop;
       const { data } = await axios.get("/api/sales", { params, headers });
       setSales(data?.data?.sales || []);
+      setTotalSales(data?.data?.pagination?.total || 0);
       setPagination(
         data?.data?.pagination || {
           current_page: page,
-          per_page: 20,
+          per_page: 12,
           total_pages: 1,
         }
       );
@@ -367,168 +393,354 @@ function SalesboardInner() {
             <div className="flex items-center space-x-4 max-[500px]:space-x-2">
               <PeriodSelect />
               <ShopDropdown />
+              <CartIcon />
               <AvatarDropdown />
             </div>
           </div>
 
           {/* Content */}
           <div className="p-4 lg:p-8 text-white">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-white/70 text-sm">
-                Period: {period.toUpperCase()}
+            <div className="mb-4">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="text-white/70 text-sm">
+                  Period: {period.toUpperCase()} • Total: {pagination.total || sales.length} sales
+                  {pagination.total > 0 && (
+                    <span className="ml-2">
+                      (Page {pagination.current_page} of {pagination.total_pages})
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* View Toggle */}
+                  <div className="flex items-center bg-white/5 rounded-lg p-1 border border-white/10">
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      className={`p-2 rounded-md transition-all ${
+                        viewMode === "grid"
+                          ? "bg-indigo-600 text-white"
+                          : "text-white/60 hover:text-white hover:bg-white/10"
+                      }`}
+                      title="Grid View"
+                    >
+                      <Grid3X3 size={16} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={`p-2 rounded-md transition-all ${
+                        viewMode === "list"
+                          ? "bg-indigo-600 text-white"
+                          : "text-white/60 hover:text-white hover:bg-white/10"
+                      }`}
+                      title="List View"
+                    >
+                      <List size={16} />
+                    </button>
+                  </div>
+
+                  <div className="relative w-[240px] sm:w-[320px]">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-white/50">
+                      <Search size={16} />
+                    </div>
+                    <input
+                      className="w-full h-10 pl-9 pr-8 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Search sales..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+                      {isSearching ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white/60"></div>
+                      ) : searchTerm ? (
+                        <button
+                          onClick={() => setSearchTerm("")}
+                          className="text-white/60 hover:text-white"
+                          title="Clear"
+                        >
+                          ✕
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* <button
+                    onClick={openCreate}
+                    className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap"
+                  >
+                    <Plus size={16} />
+                    <span>Create Sale</span>
+                  </button> */}
+                </div>
               </div>
-              <button
-                onClick={openCreate}
-                className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm"
-              >
-                <Plus size={16} />
-                <span>Create Sale</span>
-              </button>
             </div>
 
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] border border-white/10">
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="text-white/70">
-                    <tr>
-                      <th className="text-left p-2">Date</th>
-                      <th className="text-left p-2">Shop</th>
-                      <th className="text-left p-2">Product</th>
-                      <th className="text-right p-2">Qty</th>
-                      <th className="text-right p-2">Unit Price</th>
-                      <th className="text-right p-2">Total</th>
-                      <th className="text-left p-2">Payment</th>
-                      <th className="text-left p-2">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <tr>
-                        <td className="p-2" colSpan={8}>
-                          Loading...
-                        </td>
-                      </tr>
-                    ) : sales.length === 0 ? (
-                      <tr>
-                        <td className="p-2" colSpan={8}>
-                          No sales found
-                        </td>
-                      </tr>
-                    ) : (
-                      sales.map((s) => (
-                        <tr
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-400 mx-auto mb-4"></div>
+                    <p className="text-white/60">Loading sales...</p>
+                  </div>
+                </div>
+              ) : sales.filter(s => !searchTerm || 
+                s?.product?.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                s?.shop?.shop_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                s?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
+              ).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-4">
+                    <ShoppingCart size={32} className="text-white/40" />
+                  </div>
+                  <h3 className="text-lg font-medium text-white/80 mb-2">No sales found</h3>
+                  <p className="text-white/60 text-center">
+                    {searchTerm ? "Try adjusting your search terms." : "No sales records available for the selected period."}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {viewMode === "grid" ? (
+                    // Grid View
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {sales.filter(s => !searchTerm || 
+                        s?.product?.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        s?.shop?.shop_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        s?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
+                      ).map((s) => (
+                        <div
                           key={s.id}
-                          className="border-t border-white/10 hover:bg-white/5"
+                          className="bg-white/5 rounded-xl p-4 border border-white/10 hover:border-white/20 transition-all group cursor-pointer"
+                          onClick={() => openDetails(s)}
                         >
-                          <td
-                            className="p-2 cursor-pointer"
-                            onClick={() => openDetails(s)}
-                          >
-                            {new Date(s.sale_date).toLocaleString()}
-                          </td>
-                          <td
-                            className="p-2 cursor-pointer"
-                            onClick={() => openDetails(s)}
-                          >
-                            {s?.shop?.shop_name || s.shop_id}
-                          </td>
-                          <td
-                            className="p-2 cursor-pointer"
-                            onClick={() => openDetails(s)}
-                          >
-                            {s?.product?.product_name || s.product_id}
-                          </td>
-                          <td
-                            className="p-2 text-right cursor-pointer"
-                            onClick={() => openDetails(s)}
-                          >
-                            {s.quantity_sold}
-                          </td>
-                          <td
-                            className="p-2 text-right cursor-pointer"
-                            onClick={() => openDetails(s)}
-                          >
-                            {s.unit_price != null
-                              ? `₹${Number(s.unit_price).toLocaleString(
-                                  "en-IN"
-                                )}`
-                              : "-"}
-                          </td>
-                          <td
-                            className="p-2 text-right cursor-pointer"
-                            onClick={() => openDetails(s)}
-                          >{`₹${Number(s.total_amount || 0).toLocaleString(
-                            "en-IN"
-                          )}`}</td>
-                          <td
-                            className="p-2 cursor-pointer"
-                            onClick={() => openDetails(s)}
-                          >
-                            {s.payment_method}
-                          </td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-2">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center">
+                              <ShoppingCart size={20} className="text-green-400" />
+                            </div>
+                            <div className="flex items-center gap-1">
                               <button
-                                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                                onClick={() => openEdit(s)}
-                                title="Edit"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEdit(s);
+                                }}
+                                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all opacity-0 group-hover:opacity-100"
+                                title="Edit Sale"
                               >
                                 <Pencil size={14} />
                               </button>
                               <button
-                                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                                onClick={() => openDelete(s)}
-                                title="Delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDelete(s);
+                                }}
+                                className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 transition-all opacity-0 group-hover:opacity-100"
+                                title="Delete Sale"
                               >
                                 <Trash2 size={14} />
                               </button>
-                              <button
-                                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                                onClick={() => openDetails(s)}
-                                title="Details"
-                              >
-                                <Info size={14} />
-                              </button>
                             </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
 
-              {/* Pagination */}
-              <div className="flex items-center justify-between mt-4 text-sm">
-                <div>
-                  Page {pagination.current_page} of {pagination.total_pages}
+                          <div className="mb-3">
+                            <h3 className="font-medium capitalize text-white truncate mb-2">
+                              {s?.product?.product_name || s.product_id}
+                            </h3>
+                            
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Store size={14} className="text-white/40" />
+                                <span className="text-white/60 text-xs capitalize">
+                                  {s?.shop?.shop_name || s.shop_id}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center space-x-2">
+                                <Calendar size={14} className="text-white/40" />
+                                <span className="text-white/60 text-xs">
+                                  {new Date(s.sale_date).toLocaleDateString()}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center space-x-2">
+                                <Package size={14} className="text-white/40" />
+                                <span className="text-white/60 text-xs">
+                                  Qty: {s.quantity_sold}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center space-x-2">
+                                <User size={14} className="text-white/40" />
+                                <span className="text-white/60 text-xs capitalize">
+                                  {s.customer_name || "N/A"}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center space-x-2">
+                                <Phone size={14} className="text-white/40" />
+                                <span className="text-white/60 text-xs">
+                                  {s.customer_phone || "N/A"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 mb-4">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-white/60">Unit Price:</span>
+                              <span className="text-white font-medium">
+                                {s.unit_price != null
+                                  ? `₹${Number(s.unit_price).toLocaleString("en-IN")}`
+                                  : "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-white/60">Total:</span>
+                              <span className="text-green-400 font-bold">
+                                ₹{Number(s.total_amount || 0).toLocaleString("en-IN")}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-white/60">Payment:</span>
+                              <div className="flex items-center space-x-1">
+                                <CreditCard size={12} className="text-white/40" />
+                                <span className="text-white/60 capitalize text-xs">
+                                  {s.payment_method}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-center gap-1 pt-2 border-t border-white/10">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openDetails(s);
+                              }}
+                              className="flex-1 px-2 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all text-xs flex items-center justify-center space-x-1"
+                            >
+                              <Info size={12} />
+                              <span className="hidden sm:inline">Details</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    // List View (Table)
+                    <div className="overflow-x-auto">
+                      <div className="max-h-[440px] scroll-y-invisible overflow-y-auto rounded-lg">
+                        <table className="min-w-full table-fixed text-sm">
+                          <thead className="sticky top-0 z-10 bg-[#121a3d] text-white/70">
+                            <tr>
+                              <th className="text-left p-3 font-medium">Sale</th>
+                              <th className="text-left p-3 font-medium">Shop</th>
+                              <th className="text-left p-3 font-medium">Product</th>
+                              <th className="text-right p-3 w-20 font-medium">Qty</th>
+                              <th className="text-right p-3 w-32 font-medium">Unit Price</th>
+                              <th className="text-right p-3 w-32 font-medium">Total</th>
+                              <th className="text-left p-3 w-24 font-medium">Payment</th>
+                              <th className="text-center p-3 w-32 font-medium">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sales.filter(s => !searchTerm || 
+                              s?.product?.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              s?.shop?.shop_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              s?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
+                            ).map((s) => (
+                              <tr
+                                key={s.id}
+                                className="border-t border-white/10 hover:bg-white/5 transition-colors"
+                              >
+                                <td className="p-3">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="w-8 h-8 bg-green-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                      <ShoppingCart size={16} className="text-green-400" />
+                                    </div>
+                                    <div>
+                                      <div className="text-white/60 text-xs">
+                                        {new Date(s.sale_date).toLocaleDateString()}
+                                      </div>
+                                      <div className="text-white/50 text-xs capitalize">
+                                        {s.customer_name || "N/A"}
+                                      </div>
+                                      <div className="text-white/40 text-xs">
+                                        {s.customer_phone || "N/A"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-3 capitalize">
+                                  {s?.shop?.shop_name || s.shop_id}
+                                </td>
+                                <td className="p-3 capitalize">
+                                  {s?.product?.product_name || s.product_id}
+                                </td>
+                                <td className="p-3 text-right">
+                                  <span className="bg-white/10 px-2 py-1 rounded-full text-xs">
+                                    {s.quantity_sold}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-right">
+                                  {s.unit_price != null
+                                    ? `₹${Number(s.unit_price).toLocaleString("en-IN")}`
+                                    : "-"}
+                                </td>
+                                <td className="p-3 text-right font-bold text-green-400">
+                                  ₹{Number(s.total_amount || 0).toLocaleString("en-IN")}
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center space-x-1">
+                                    <CreditCard size={12} className="text-white/40" />
+                                    <span className="capitalize text-xs">
+                                      {s.payment_method}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all border border-white/10"
+                                      onClick={() => openEdit(s)}
+                                      title="Edit"
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button
+                                      className="px-2 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 transition-all border border-red-500/30"
+                                      onClick={() => openDelete(s)}
+                                      title="Delete"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                    <button
+                                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all border border-white/10"
+                                      onClick={() => openDetails(s)}
+                                      title="Details"
+                                    >
+                                      <Info size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {sales.length > 0 && (
+                <div className="mt-5">
+                  <Pagination
+                    currentPage={pagination.current_page}
+                    totalPages={pagination.total_pages}
+                    onPageChange={(page) => loadSales(page)}
+                    totalItems={totalSales}
+                    pageSize={pagination.per_page}
+                  />
                 </div>
-                <div className="space-x-2">
-                  <button
-                    className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
-                    onClick={() =>
-                      loadSales(Math.max(1, (pagination.current_page || 1) - 1))
-                    }
-                    disabled={pagination.current_page <= 1}
-                  >
-                    Prev
-                  </button>
-                  <button
-                    className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
-                    onClick={() =>
-                      loadSales(
-                        Math.min(
-                          pagination.total_pages || 1,
-                          (pagination.current_page || 1) + 1
-                        )
-                      )
-                    }
-                    disabled={pagination.current_page >= pagination.total_pages}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -797,133 +1009,213 @@ function SalesboardInner() {
 
       {/* Edit Modal */}
       {editOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
-          <div className="w-full max-w-lg bg-[#0f1535] text-white rounded-2xl border border-white/10 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Edit Sale</h3>
-              <button
-                className="text-white/60"
-                onClick={() => setEditOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <form onSubmit={handleEdit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-white/60">Quantity</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={editForm.quantity_sold}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        quantity_sold: e.target.value,
-                      })
-                    }
-                  />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3">
+          <div className="w-full max-w-3xl bg-gradient-to-br from-[#0f1535] to-[#1a2048] text-white rounded-2xl border border-white/20 shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600/20 to-purple-600/20 p-6 border-b border-white/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-indigo-600/20 rounded-xl flex items-center justify-center">
+                    <Pencil size={24} className="text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Edit Sale</h3>
+                    <p className="text-white/60 text-sm">Update sale information</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-white/60">
-                    Unit Price (₹)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={editForm.unit_price}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, unit_price: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-white/60">Total (auto)</label>
-                  <input
-                    type="text"
-                    readOnly
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={`₹${Number(editTotal).toLocaleString("en-IN")}`}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-white/60">Payment</label>
-                  <select
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={editForm.payment_method}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        payment_method: e.target.value,
-                      })
-                    }
-                  >
-                    {["cash", "card", "upi", "bank_transfer", "credit"].map(
-                      (m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      )
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-white/60">Customer Name</label>
-                  <input
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={editForm.customer_name}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        customer_name: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-white/60">
-                    Customer Phone
-                  </label>
-                  <input
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={editForm.customer_phone}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        customer_phone: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-white/60">
-                    Sale Date/Time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    className="w-full bg-white/10 border border-white/10 rounded p-2 mt-1"
-                    value={editForm.sale_date}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, sale_date: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  className="px-3 py-2 rounded bg-white/10 hover:bg-white/20"
+                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
+                  onClick={() => setEditOpen(false)}
+                >
+                  <span className="text-white/80 text-lg">✕</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Form Content */}
+            <form onSubmit={handleEdit} className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Quantity & Unit Price */}
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Package size={18} className="text-indigo-400" />
+                    <h4 className="font-semibold text-white">Quantity & Price</h4>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
+                        <Package size={14} />
+                        <span>Quantity</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 transition-all"
+                        value={editForm.quantity_sold}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            quantity_sold: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
+                        <DollarSign size={14} />
+                        <span>Unit Price (₹)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 transition-all"
+                        value={editForm.unit_price}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, unit_price: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment & Total */}
+                <div className="bg-gradient-to-br from-green-600/10 to-emerald-600/10 rounded-xl p-4 border border-green-600/20 h-full">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <DollarSign size={18} className="text-green-400" />
+                    <h4 className="font-semibold text-white">Payment Details</h4>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
+                        <CreditCard size={14} />
+                        <span>Payment Method</span>
+                      </label>
+                      <select
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                        value={editForm.payment_method}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            payment_method: e.target.value,
+                          })
+                        }
+                      >
+                        {["cash", "card", "upi", "bank_transfer", "credit"].map(
+                          (m) => (
+                            <option key={m} value={m} className="bg-[#0f1535] text-white">
+                              {m.charAt(0).toUpperCase() + m.slice(1).replace('_', ' ')}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
+                        <DollarSign size={14} />
+                        <span>Total Amount</span>
+                      </label>
+                      <div className="bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-600/30 rounded-lg p-4 text-center">
+                        <span className="text-green-400 font-bold text-2xl">
+                          ₹{Number(editTotal).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Customer Information */}
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <User size={18} className="text-purple-400" />
+                    <h4 className="font-semibold text-white">Customer Information</h4>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
+                        <User size={14} />
+                        <span>Customer Name</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all"
+                        placeholder="Enter customer name"
+                        value={editForm.customer_name}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            customer_name: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
+                        <Phone size={14} />
+                        <span>Customer Phone</span>
+                      </label>
+                      <input
+                        type="tel"
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all"
+                        placeholder="Enter phone number"
+                        value={editForm.customer_phone}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            customer_phone: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sale Date & Time */}
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Calendar size={18} className="text-blue-400" />
+                    <h4 className="font-semibold text-white">Sale Date & Time</h4>
+                  </div>
+                  
+                  <div className="flex flex-col justify-center h-full">
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
+                        <Calendar size={14} />
+                        <span>Date & Time</span>
+                      </label>
+                      <input
+                        type="datetime-local"
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all"
+                        value={editForm.sale_date}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, sale_date: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="mt-6 pt-4 border-t border-white/10 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all border border-white/10"
                   onClick={() => setEditOpen(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700"
+                  className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all flex items-center space-x-2 shadow-lg"
                 >
-                  Save
+                  <span>Save Changes</span>
                 </button>
               </div>
             </form>
@@ -960,68 +1252,164 @@ function SalesboardInner() {
 
       {/* Details Modal */}
       {detailsOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
-          <div className="w-full max-w-xl bg-[#0f1535] text-white rounded-2xl border border-white/10 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Sale Details</h3>
-              <button
-                className="text-white/60"
-                onClick={() => setDetailsOpen(false)}
-              >
-                ✕
-              </button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3">
+          <div className="w-full max-w-2xl bg-gradient-to-br from-[#0f1535] to-[#1a2048] text-white rounded-2xl border border-white/20 shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600/20 to-purple-600/20 p-6 border-b border-white/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-green-600/20 rounded-xl flex items-center justify-center">
+                    <ShoppingCart size={24} className="text-green-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Sale Details</h3>
+                    <p className="text-white/60 text-sm">Transaction Information</p>
+                  </div>
+                </div>
+                <button
+                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
+                  onClick={() => setDetailsOpen(false)}
+                >
+                  <span className="text-white/80 text-lg">✕</span>
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-white/60">Date</p>
-                <p>
-                  {detailsSale?.sale_date
-                    ? new Date(detailsSale.sale_date).toLocaleString()
-                    : "-"}
-                </p>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Sale Information */}
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <Calendar size={20} className="text-indigo-400" />
+                    <h4 className="font-semibold text-white">Sale Information</h4>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/60 text-sm">Date & Time</span>
+                      <span className="text-white font-medium text-right">
+                        {detailsSale?.sale_date
+                          ? new Date(detailsSale.sale_date).toLocaleString()
+                          : "N/A"}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/60 text-sm">Quantity</span>
+                      <span className="bg-indigo-600/20 text-indigo-300 px-3 py-1 rounded-full text-sm font-medium">
+                        {detailsSale?.quantity_sold || "0"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Shop & Product */}
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <Store size={20} className="text-blue-400" />
+                    <h4 className="font-semibold text-white">Shop & Product</h4>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-white/60 text-sm block mb-1">Shop Name</span>
+                      <span className="text-white capitalize">
+                        {detailsSale?.shop?.shop_name || detailsSale?.shop_id || "N/A"}
+                      </span>
+                    </div>
+                    
+                    <div>
+                      <span className="text-white/60 text-sm block mb-1">Product Name</span>
+                      <span className="text-white capitalize">
+                        {detailsSale?.product?.product_name || detailsSale?.product_id || "N/A"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Details */}
+                <div className="bg-gradient-to-br from-green-600/10 to-emerald-600/10 rounded-xl p-4 border border-green-600/20 h-full">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <DollarSign size={20} className="text-green-400" />
+                    <h4 className="font-semibold text-white">Financial Details</h4>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/60 text-sm">Unit Price</span>
+                      <span className="text-white font-medium">
+                        {detailsSale?.unit_price != null
+                          ? `₹${Number(detailsSale.unit_price).toLocaleString("en-IN")}`
+                          : "N/A"}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between py-2 border-t border-white/10">
+                      <span className="text-green-300 font-medium">Total Amount</span>
+                      <span className="text-green-400 font-bold text-lg">
+                        ₹{Number(detailsSale?.total_amount || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/60 text-sm">Payment Method</span>
+                      <div className="flex items-center space-x-2">
+                        <CreditCard size={16} className="text-white/40" />
+                        <span className="text-white capitalize">
+                          {detailsSale?.payment_method || "N/A"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Customer Details */}
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <User size={20} className="text-purple-400" />
+                    <h4 className="font-semibold text-white">Customer Details</h4>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-white/60 text-sm block mb-1">Customer Name</span>
+                      <span className="text-white capitalize">
+                        {detailsSale?.customer_name || "N/A"}
+                      </span>
+                    </div>
+                    
+                    <div>
+                      <span className="text-white/60 text-sm block mb-1">Phone Number</span>
+                      <div className="flex items-center space-x-2">
+                        <Phone size={14} className="text-white/40" />
+                        <span className="text-white">
+                          {detailsSale?.customer_phone || "N/A"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-white/60">Payment</p>
-                <p>{detailsSale?.payment_method || "-"}</p>
-              </div>
-              <div>
-                <p className="text-white/60">Shop</p>
-                <p>{detailsSale?.shop?.shop_name || detailsSale?.shop_id}</p>
-              </div>
-              <div>
-                <p className="text-white/60">Product</p>
-                <p>
-                  {detailsSale?.product?.product_name ||
-                    detailsSale?.product_id}
-                </p>
-              </div>
-              <div>
-                <p className="text-white/60">Quantity</p>
-                <p>{detailsSale?.quantity_sold}</p>
-              </div>
-              <div>
-                <p className="text-white/60">Unit Price</p>
-                <p>
-                  {detailsSale?.unit_price != null
-                    ? `₹${Number(detailsSale.unit_price).toLocaleString(
-                        "en-IN"
-                      )}`
-                    : "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-white/60">Total Amount</p>
-                <p>{`₹${Number(detailsSale?.total_amount || 0).toLocaleString(
-                  "en-IN"
-                )}`}</p>
-              </div>
-              <div>
-                <p className="text-white/60">Customer</p>
-                <p>{detailsSale?.customer_name || "-"}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-white/60">Customer Phone</p>
-                <p>{detailsSale?.customer_phone || "-"}</p>
+
+              {/* Footer Actions */}
+              <div className="mt-6 pt-4 border-t border-white/10 flex justify-end space-x-3">
+                <button
+                  onClick={() => setDetailsOpen(false)}
+                  className="px-6 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all border border-white/10"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setDetailsOpen(false);
+                    openEdit(detailsSale);
+                  }}
+                  className="px-6 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all flex items-center space-x-2"
+                >
+                  <Pencil size={16} />
+                  <span>Edit Sale</span>
+                </button>
               </div>
             </div>
           </div>

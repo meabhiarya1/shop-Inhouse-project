@@ -8,6 +8,7 @@ import { DashboardProvider, useDashboard } from '../context/DashboardContext.jsx
 import PeriodSelect from './navbar/PeriodSelect.jsx'
 import ShopDropdown from './navbar/ShopDropdown.jsx'
 import AvatarDropdown from './navbar/AvatarDropdown.jsx'
+import CartIcon from './navbar/CartIcon.jsx'
 import Sidebar from './Sidebar.jsx'
 import { useLocation } from 'react-router-dom'
 
@@ -90,6 +91,7 @@ function DashboardInner() {
             <div className="flex items-center space-x-4 max-[500px]:space-x-2">
               <PeriodSelect />
               <ShopDropdown />
+              <CartIcon />
               <AvatarDropdown />
             </div>
           </div>

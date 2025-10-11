@@ -5,7 +5,18 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { Menu, Plus, Pencil, Trash2, Info, Search } from "lucide-react";
+import { 
+  Menu, 
+  Plus, 
+  Pencil, 
+  Trash2, 
+  Info, 
+  Search,
+  Grid3X3,
+  List,
+  Tag,
+  Package
+} from "lucide-react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import Sidebar from "./Sidebar.jsx";
@@ -14,6 +25,7 @@ import { DashboardProvider } from "../context/DashboardContext.jsx";
 import PeriodSelect from "./navbar/PeriodSelect.jsx";
 import ShopDropdown from "./navbar/ShopDropdown.jsx";
 import AvatarDropdown from "./navbar/AvatarDropdown.jsx";
+import CartIcon from "./navbar/CartIcon.jsx";
 
 function CategoriesInner() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -24,7 +36,7 @@ function CategoriesInner() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({
     currentPage: 1,
-    limit: 10,
+    limit: 12,
     total: 0,
     totalPages: 0,
     hasNextPage: false,
@@ -46,6 +58,9 @@ function CategoriesInner() {
   const [detailsLoadingId, setDetailsLoadingId] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const searchTimeoutRef = useRef(null);
+  
+  // View mode state
+  const [viewMode, setViewMode] = useState("grid"); // "grid" or "list"
 
   const headers = useMemo(
     () => ({
@@ -60,15 +75,15 @@ function CategoriesInner() {
       const { data } = await axios.get("/api/categories", {
         headers,
         // Frontend-only search; do not send q
-        params: { page, limit: 10 },
+        params: { page, limit: 12 },
       });
 
       const list = Array.isArray(data?.data) ? data.data : [];
       const paginationData = data?.pagination || {
         currentPage: page,
-        limit: 10,
+        limit: 12,
         total: list.length,
-        totalPages: Math.ceil(list.length / 10),
+        totalPages: Math.ceil(list.length / 12),
         hasNextPage: false,
         hasPrevPage: false,
       };
@@ -113,7 +128,7 @@ function CategoriesInner() {
         const params = {
           q: query.trim(),
           page,
-          limit: 10,
+          limit: 12,
         };
         const { data } = await axios.get("/api/categories/search", {
           params,
@@ -132,10 +147,10 @@ function CategoriesInner() {
         } else {
           const totalCategories =
             data?.data?.totalCategories || categoriesList.length;
-          const totalPages = Math.ceil(totalCategories / 10);
+          const totalPages = Math.ceil(totalCategories / 12);
           setPagination({
             currentPage: page,
-            limit: 10,
+            limit: 12,
             total: totalCategories,
             totalPages: totalPages,
             hasNextPage: page < totalPages,
@@ -348,6 +363,7 @@ function CategoriesInner() {
               {/* Navbar kept consistent */}
               <PeriodSelect />
               <ShopDropdown />
+              <CartIcon />
               <AvatarDropdown />
             </div>
           </div>
@@ -369,155 +385,278 @@ function CategoriesInner() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between mb-4 gap-3">
-              <div className="text-white/70 text-sm">
-                Total: {pagination.total} categories
-                {pagination.total > 0 && (
-                  <span className="ml-2">
-                    (Page {pagination.currentPage} of {pagination.totalPages})
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="relative w-[240px] sm:w-[320px]">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-white/50">
-                    <Search size={16} />
-                  </div>
-                  <input
-                    className="w-full h-10 pl-9 pr-8 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Search categories..."
-                    value={searchTerm}
-                    onChange={handleSearch}
-                  />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-2">
-                    {isSearching ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white/60"></div>
-                    ) : searchTerm ? (
-                      <button
-                        onClick={() => {
-                          setSearchTerm("");
-                          setCurrentPage(1);
-                          loadCategories(1);
-                        }}
-                        className="text-white/60 hover:text-white"
-                        title="Clear"
-                      >
-                        ✕
-                      </button>
-                    ) : null}
-                  </div>
+            <div className="mb-4">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="text-white/70 text-sm">
+                  Total: {pagination.total} categories
+                  {pagination.total > 0 && (
+                    <span className="ml-2">
+                      (Page {pagination.currentPage} of {pagination.totalPages})
+                    </span>
+                  )}
                 </div>
 
-                <button
-                  onClick={openCreate}
-                  className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap"
-                >
-                  <Plus size={16} />
-                  <span>Create Category</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  {/* View Toggle */}
+                  <div className="flex items-center bg-white/5 rounded-lg p-1 border border-white/10">
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      className={`p-2 rounded-md transition-all ${
+                        viewMode === "grid"
+                          ? "bg-indigo-600 text-white"
+                          : "text-white/60 hover:text-white hover:bg-white/10"
+                      }`}
+                      title="Grid View"
+                    >
+                      <Grid3X3 size={16} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={`p-2 rounded-md transition-all ${
+                        viewMode === "list"
+                          ? "bg-indigo-600 text-white"
+                          : "text-white/60 hover:text-white hover:bg-white/10"
+                      }`}
+                      title="List View"
+                    >
+                      <List size={16} />
+                    </button>
+                  </div>
+
+                  <div className="relative w-[240px] sm:w-[320px]">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-white/50">
+                      <Search size={16} />
+                    </div>
+                    <input
+                      className="w-full h-10 pl-9 pr-8 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Search categories..."
+                      value={searchTerm}
+                      onChange={handleSearch}
+                    />
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+                      {isSearching ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white/60"></div>
+                      ) : searchTerm ? (
+                        <button
+                          onClick={() => {
+                            setSearchTerm("");
+                            setCurrentPage(1);
+                            loadCategories(1);
+                          }}
+                          className="text-white/60 hover:text-white"
+                          title="Clear"
+                        >
+                          ✕
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={openCreate}
+                    className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap"
+                  >
+                    <Plus size={16} />
+                    <span>Create Category</span>
+                  </button>
+                </div>
               </div>
             </div>
 
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] border border-white/10">
-              <div className="overflow-x-auto">
-                {/* Scrollable region with sticky header; keeps columns aligned */}
-                <div className="max-h-[440px] scroll-y-invisible overflow-y-auto rounded-lg">
-                  <table className="min-w-full table-fixed text-sm">
-                    <thead className="sticky top-0 z-10 bg-[#121a3d] text-white/70">
-                      <tr>
-                        <th className="text-left p-2 pr-4">Name</th>
-                        <th className="text-left p-2 w-40">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading || isSearching ? (
-                        <tr>
-                          <td className="p-2 text-xs md:text-sm" colSpan={2}>
-                            {isSearching ? "Searching..." : "Loading..."}
-                          </td>
-                        </tr>
-                      ) : categories.length === 0 ? (
-                        <tr>
-                          <td className="p-2" colSpan={2}>
-                            No categories found
-                          </td>
-                        </tr>
-                      ) : (
-                        categories.map((c) => (
-                          <tr
-                            key={c.id}
-                            className="border-t border-white/10 hover:bg-white/5"
-                          >
-                            <td
-                              className="p-2 pr-4 cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis capitalize"
-                              onClick={() => openDetails(c)}
-                              title={c.category_name}
-                            >
-                              {c.category_name}
-                            </td>
-                            <td className="p-2 w-40">
-                              <div className="flex items-center gap-2 min-w-[140px]">
-                                <button
-                                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
-                                  onClick={() => openEdit(c)}
-                                  title="Edit"
-                                  disabled={
-                                    creating ||
-                                    saving ||
-                                    deleting ||
-                                    detailsLoadingId === c.id
-                                  }
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button
-                                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
-                                  onClick={() => openDelete(c)}
-                                  title="Delete"
-                                  disabled={
-                                    creating ||
-                                    saving ||
-                                    deleting ||
-                                    detailsLoadingId === c.id
-                                  }
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                                <button
-                                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
-                                  onClick={() => openDetails(c)}
-                                  title="Details"
-                                  disabled={creating || saving || deleting}
-                                >
-                                  {detailsLoadingId === c.id ? (
-                                    <span className="inline-block h-4 w-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
-                                  ) : (
-                                    <Info size={14} />
-                                  )}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+              {loading || isSearching ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-400 mx-auto mb-4"></div>
+                    <p className="text-white/60">
+                      {isSearching ? "Searching categories..." : "Loading categories..."}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : categories.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-4">
+                    <Tag size={32} className="text-white/40" />
+                  </div>
+                  <h3 className="text-lg font-medium text-white/80 mb-2">No categories found</h3>
+                  <p className="text-white/60 text-center">
+                    {searchTerm ? "Try adjusting your search terms." : "Create your first category to get started."}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {viewMode === "grid" ? (
+                    // Grid View
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {categories.map((c) => (
+                        <div
+                          key={c.id}
+                          className="bg-white/5 rounded-xl p-4 border border-white/10 hover:border-white/20 transition-all group cursor-pointer"
+                          onClick={() => openDetails(c)}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="w-12 h-12 bg-indigo-600/20 rounded-lg flex items-center justify-center">
+                              <Tag size={20} className="text-indigo-400" />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEdit(c);
+                                }}
+                                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all opacity-0 group-hover:opacity-100"
+                                title="Edit Category"
+                                disabled={creating || saving || deleting || detailsLoadingId === c.id}
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDelete(c);
+                                }}
+                                className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 transition-all opacity-0 group-hover:opacity-100"
+                                title="Delete Category"
+                                disabled={creating || saving || deleting || detailsLoadingId === c.id}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
 
-              {/* Pagination */}
-              {!loading && !isSearching && pagination.totalPages > 1 && (
-                <div className="mt-6 pt-4 border-t border-white/10">
-                  <Pagination
-                    currentPage={pagination.currentPage}
-                    totalPages={pagination.totalPages}
-                    total={pagination.total}
-                    limit={pagination.limit}
-                    onPageChange={handlePageChange}
-                    className="text-white"
-                  />
-                </div>
+                          <div className="mb-3">
+                            <h3 className="font-medium capitalize text-white truncate mb-1">
+                              {c.category_name}
+                            </h3>
+                            <div className="flex items-center space-x-2">
+                              <Package size={14} className="text-white/40" />
+                              <span className="text-white/60 text-xs">
+                                Category ID: {c.id}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-center gap-1 pt-2 border-t border-white/10">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openDetails(c);
+                              }}
+                              className="flex-1 px-2 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all text-xs flex items-center justify-center space-x-1"
+                              disabled={creating || saving || deleting}
+                            >
+                              {detailsLoadingId === c.id ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white/60"></div>
+                              ) : (
+                                <Info size={12} />
+                              )}
+                              <span className="hidden sm:inline">
+                                {detailsLoadingId === c.id ? "Loading..." : "Details"}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    // List View (Table)
+                    <div className="overflow-x-auto">
+                      <div className="max-h-[440px] scroll-y-invisible overflow-y-auto rounded-lg">
+                        <table className="min-w-full table-fixed text-sm">
+                          <thead className="sticky top-0 z-10 bg-[#121a3d] text-white/70">
+                            <tr>
+                              <th className="text-left p-3 font-medium">Category</th>
+                              <th className="text-left p-3 w-32 font-medium">ID</th>
+                              <th className="text-center p-3 w-40 font-medium">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {categories.map((c) => (
+                              <tr
+                                key={c.id}
+                                className="border-t border-white/10 hover:bg-white/5 transition-colors"
+                              >
+                                <td className="p-3">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                      <Tag size={16} className="text-indigo-400" />
+                                    </div>
+                                    <div
+                                      className="cursor-pointer capitalize font-medium hover:text-indigo-300 transition-colors"
+                                      onClick={() => openDetails(c)}
+                                      title={c.category_name}
+                                    >
+                                      {c.category_name}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-white/60">
+                                  #{c.id}
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all border border-white/10"
+                                      onClick={() => openEdit(c)}
+                                      title="Edit"
+                                      disabled={
+                                        creating ||
+                                        saving ||
+                                        deleting ||
+                                        detailsLoadingId === c.id
+                                      }
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button
+                                      className="px-2 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 transition-all border border-red-500/30"
+                                      onClick={() => openDelete(c)}
+                                      title="Delete"
+                                      disabled={
+                                        creating ||
+                                        saving ||
+                                        deleting ||
+                                        detailsLoadingId === c.id
+                                      }
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                    <button
+                                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all border border-white/10"
+                                      onClick={() => openDetails(c)}
+                                      title="Details"
+                                      disabled={creating || saving || deleting}
+                                    >
+                                      {detailsLoadingId === c.id ? (
+                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white/60"></div>
+                                      ) : (
+                                        <Info size={14} />
+                                      )}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pagination */}
+                  {pagination.totalPages > 1 && (
+                    <div className="mt-6 pt-4 border-t border-white/10">
+                      <Pagination
+                        currentPage={pagination.currentPage}
+                        totalPages={pagination.totalPages}
+                        total={pagination.total}
+                        limit={pagination.limit}
+                        onPageChange={handlePageChange}
+                        className="text-white"
+                      />
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

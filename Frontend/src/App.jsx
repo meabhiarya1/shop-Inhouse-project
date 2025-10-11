@@ -6,6 +6,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Salesboard from './components/Salesboard'
 import Products from './components/Products'
 import Categories from './components/Categories'
+import { CartProvider } from './context/CartContext'
+import CartModal from './components/CartModal'
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, initialized } = useAuth()
@@ -15,42 +17,45 @@ function PrivateRoute({ children }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          <PrivateRoute>
-            <Dashboard />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/sales"
-        element={
-          <PrivateRoute>
-            <Salesboard />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/categories"
-        element={
-          <PrivateRoute>
-            <Categories />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/products"
-        element={
-          <PrivateRoute>
-            <Products />
-          </PrivateRoute>
-        }
-      />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <CartProvider>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              <Dashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/sales"
+          element={
+            <PrivateRoute>
+              <Salesboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/categories"
+          element={
+            <PrivateRoute>
+              <Categories />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/products"
+          element={
+            <PrivateRoute>
+              <Products />
+            </PrivateRoute>
+          }
+        />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <CartModal />
+    </CartProvider>
   )
 }
 
