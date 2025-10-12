@@ -8,7 +8,55 @@ const router = express.Router();
 // Apply auth middleware to all sales routes
 router.use(authMiddleware);
 
-// Validation rules for sale
+// Validation rules for bulk sale (new multi-item structure)
+const bulkSaleValidation = [
+  body('items')
+    .isArray({ min: 1 })
+    .withMessage('Items array is required and must contain at least one item'),
+
+  body('items.*.product_id')
+    .isInt({ min: 1 })
+    .withMessage('Valid product ID is required for each item'),
+
+  body('items.*.quantity')
+    .isInt({ min: 1 })
+    .withMessage('Quantity must be at least 1 for each item'),
+
+  body('items.*.unit_price')
+    .isFloat({ min: 0 })
+    .withMessage('Unit price must be a positive number for each item'),
+
+  body('items.*.total')
+    .isFloat({ min: 0 })
+    .withMessage('Total must be a positive number for each item'),
+
+  body('customer.customer_name')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Customer name cannot exceed 100 characters'),
+
+  body('customer.customer_phone')
+    .optional()
+    .trim()
+    .isLength({ max: 20 })
+    .withMessage('Customer phone cannot exceed 20 characters'),
+
+  body('customer.payment_method')
+    .optional()
+    .isIn(['cash', 'upi', 'cash/upi'])
+    .withMessage('Invalid payment method'),
+
+  body('customer.customer_paid')
+    .isFloat({ min: 0.01 })
+    .withMessage('Customer paid amount is required and must be greater than 0'),
+
+  body('totals.total')
+    .isFloat({ min: 0.01 })
+    .withMessage('Total amount is required and must be greater than 0')
+];
+
+// Validation rules for single sale (legacy support)
 const saleValidation = [
   body('product_id')
     .isInt({ min: 1 })
@@ -40,7 +88,7 @@ const saleValidation = [
 
   body('payment_method')
     .optional()
-    .isIn(['cash', 'card', 'upi', 'bank_transfer', 'credit'])
+    .isIn(['cash', 'upi', 'cash/upi'])
     .withMessage('Invalid payment method'),
 
   body('notes')
@@ -50,7 +98,42 @@ const saleValidation = [
     .withMessage('Notes cannot exceed 500 characters')
 ];
 
-// Update validation (some fields optional)
+// Bulk update validation (for multi-item sale updates)
+const bulkUpdateSaleValidation = [
+  body('items')
+    .isArray({ min: 1 })
+    .withMessage('Items array is required and must contain at least one item'),
+
+  body('items.*.sale_id')
+    .isInt({ min: 1 })
+    .withMessage('Valid sale ID is required for each item'),
+
+  body('items.*.product_id')
+    .isInt({ min: 1 })
+    .withMessage('Valid product ID is required for each item'),
+
+  body('items.*.quantity')
+    .isInt({ min: 1 })
+    .withMessage('Quantity must be at least 1 for each item'),
+
+  body('items.*.unit_price')
+    .isFloat({ min: 0 })
+    .withMessage('Unit price must be a positive number for each item'),
+
+  body('items.*.total')
+    .isFloat({ min: 0 })
+    .withMessage('Total must be a positive number for each item'),
+
+  body('customer.customer_paid')
+    .isFloat({ min: 0.01 })
+    .withMessage('Customer paid amount is required and must be greater than 0'),
+
+  body('totals.total')
+    .isFloat({ min: 0.01 })
+    .withMessage('Total amount is required and must be greater than 0')
+];
+
+// Update validation (some fields optional) - Single sale update
 const updateSaleValidation = [
   body('quantity_sold')
     .optional()
@@ -76,7 +159,7 @@ const updateSaleValidation = [
 
   body('payment_method')
     .optional()
-    .isIn(['cash', 'card', 'upi', 'bank_transfer', 'credit'])
+    .isIn(['cash', 'upi', 'cash/upi'])
     .withMessage('Invalid payment method'),
 
   body('notes')
@@ -89,8 +172,16 @@ const updateSaleValidation = [
 // Routes
 router.get('/', SalesController.getAllSales);
 router.get('/:id', SalesController.getSaleById);
-router.post('/', saleValidation, SalesController.createSale);
+
+// Create sale - now handles bulk sales with multiple items
+router.post('/', bulkSaleValidation, SalesController.createSale);
+
+// Update single sale (legacy)
 router.put('/:id', updateSaleValidation, SalesController.updateSale);
+
+// Bulk update multiple sales
+// router.put('/bulk/update', bulkUpdateSaleValidation, SalesController.updateBulkSale);
+
 router.delete('/:id', SalesController.deleteSale);
 
 module.exports = router;

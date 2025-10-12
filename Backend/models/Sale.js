@@ -29,6 +29,15 @@ Sale.init({
       key: 'id'
     }
   },
+
+  customer_sale_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'customer_sale_mappings',
+      key: 'id'
+    }
+  },
   
   quantity_sold: {
     type: DataTypes.INTEGER,
@@ -45,36 +54,6 @@ Sale.init({
       min: { args: [0], msg: 'Unit price must be non-negative' }
     }
   },
-  
-  total_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
-    validate: {
-      min: { args: [0], msg: 'Total amount must be non-negative' }
-    }
-  },
-  
-  customer_name: {
-    type: DataTypes.STRING(100),
-    allowNull: true
-  },
-  
-  customer_phone: {
-    type: DataTypes.STRING(20),
-    allowNull: true
-  },
-  
-  payment_method: {
-    type: DataTypes.ENUM('cash','upi', 'cash/upi'),
-    allowNull: true,
-    defaultValue: 'cash'
-  },
-  
-  sale_date: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW
-  },
 
 }, {
   sequelize,
@@ -89,13 +68,13 @@ Sale.init({
       fields: ['shop_id']
     },
     {
-      fields: ['sale_date']
-    },
-    {
-      fields: ['payment_method']
+      fields: ['customer_sale_id']
     }
   ]
 });
+
+// Import CustomerSaleMapping for associations
+const CustomerSaleMapping = require('./CustomerSaleMapping');
 
 // Define associations
 Sale.belongsTo(Product, {
@@ -108,6 +87,11 @@ Sale.belongsTo(Shop, {
   as: 'shop'
 });
 
+Sale.belongsTo(CustomerSaleMapping, {
+  foreignKey: 'customer_sale_id',
+  as: 'customerSale'
+});
+
 // Reverse associations
 Product.hasMany(Sale, {
   foreignKey: 'product_id',
@@ -116,6 +100,11 @@ Product.hasMany(Sale, {
 
 Shop.hasMany(Sale, {
   foreignKey: 'shop_id',
+  as: 'sales'
+});
+
+CustomerSaleMapping.hasMany(Sale, {
+  foreignKey: 'customer_sale_id',
   as: 'sales'
 });
 

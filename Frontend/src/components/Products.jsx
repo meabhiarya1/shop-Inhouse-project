@@ -216,7 +216,7 @@ function CategoryDropdown({
 
 function ProductsInner() {
   const { selectedShop, period, shops } = useDashboard();
-  const { addToCart } = useCart();
+  const { addToCart, reloadCartFromBackend } = useCart();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [brands, setBrands] = useState([]); // Store all brands
@@ -845,13 +845,13 @@ function ProductsInner() {
       // Set loading state for this specific product
       setAddingToCart(prev => ({ ...prev, [product.id]: true }));
       
-      // Add product to cart context
-      addToCart({
+      // Add product to cart context (this will now handle backend sync and reload)
+      await addToCart({
         id: product.id,
         product_name: product.product_name,
-        brand: product.Brand?.brand_name || 'Unknown',
-        category: product.Category?.category_name || 'Uncategorized',
-        shop: product.Shop?.shop_name || 'Unknown Shop',
+        brand: product.brand?.brand_name || product.Brand?.brand_name || 'Unknown',
+        category: product.category?.category_name || product.Category?.category_name || 'Uncategorized',
+        shop: product.shop?.shop_name || product.Shop?.shop_name || 'Unknown Shop',
         length: product.length,
         width: product.width,
         thickness: product.thickness,
@@ -859,15 +859,20 @@ function ProductsInner() {
         quantity: product.quantity // Include the backend quantity for stock validation
       });
       
-      // Brief loading state for better UX
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Additional reload to ensure UI consistency 
+      // (the addToCart method already reloads, but this ensures any UI updates)
+      if (reloadCartFromBackend) {
+        await reloadCartFromBackend();
+      }
       
     } catch (error) {
       toast.error("Failed to add item to cart. Please try again.");
       console.error("Error adding to cart:", error);
     } finally {
-      // Clear loading state
-      setAddingToCart(prev => ({ ...prev, [product.id]: false }));
+      // Clear loading state after a brief delay for better UX
+      setTimeout(() => {
+        setAddingToCart(prev => ({ ...prev, [product.id]: false }));
+      }, 300);
     }
   };
 

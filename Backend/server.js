@@ -9,6 +9,7 @@ const brandRoutes = require("./routes/brandRoutes");
 const productRoutes = require("./routes/productRoutes");
 const salesRoutes = require("./routes/salesRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const cartRoutes = require("./routes/cartRoutes");
 
 // Initialize Express app
 const app = express();
@@ -24,6 +25,7 @@ app.use(
       "http://localhost:5000",
       "http://localhost:8000",
       "http://localhost:8080",
+      "http://localhost:8989",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -57,6 +59,7 @@ app.use("/api/brands", brandRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/cart", cartRoutes);
 
 // Handle 404 routes
 app.use("*", (req, res) => {
@@ -77,7 +80,7 @@ app.use((error, req, res, next) => {
 
 // Start server
 const startServer = async () => {
-  const ports = [5000, 3000, 8000, 8080];
+  const ports = [8989];
 
   for (const port of ports) {
     try {

@@ -5,6 +5,7 @@ const Product = require('../models/Product');
 const Shop = require('../models/Shop');
 const Brand = require('../models/Brand');
 const Category = require('../models/Category');
+const CustomerSaleMapping = require('../models/CustomerSaleMapping');
 const { Op } = require('sequelize');
 
 class SalesController {
@@ -25,68 +26,151 @@ class SalesController {
       }
 
       const {
-        product_id,
-        shop_id,
-        quantity_sold,
-        unit_price,
-        customer_name,
-        customer_phone,
-        total_amount,
-        payment_method = 'cash',
-        sale_date
+        items,
+        customer,
+        totals
       } = req.body;
 
-      // Check if product exists and has enough quantity
-      const product = await Product.findByPk(product_id, { transaction });
-      if (!product) {
-        await transaction.rollback();
-        return res.status(404).json({
-          success: false,
-          message: 'Product not found'
-        });
-      }
-
-      if (product.quantity < quantity_sold) {
+      // Validate required data structure
+      if (!items || !Array.isArray(items) || items.length === 0) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock. Available quantity: ${product.quantity}, Requested: ${quantity_sold}`
+          message: 'Items array is required and must contain at least one item'
         });
       }
 
-      // Check if shop exists
-      const shop = await Shop.findByPk(shop_id, { transaction });
-      if (!shop) {
+      if (!customer || !totals) {
         await transaction.rollback();
-        return res.status(404).json({
+        return res.status(400).json({
           success: false,
-          message: 'Shop not found'
+          message: 'Customer and totals information are required'
         });
       }
 
-      // Calculate total amount
-    //   const total_amount = parseFloat(unit_price) * parseInt(quantity_sold);
+      // Validate customer payment
+      const customerPaidAmount = parseFloat(customer.customer_paid || totals.customer_paid);
+      if (!customerPaidAmount || customerPaidAmount <= 0) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Customer paid amount is required and must be greater than 0'
+        });
+      }
 
-      // Create sale record
-      const sale = await Sale.create({
-        product_id,
-        shop_id,
-        quantity_sold: parseInt(quantity_sold),
-        unit_price: parseFloat(unit_price) || null,
-        total_amount,
+      // Extract customer and sale info
+      const {
+        customer_name,
+        customer_phone,
+        payment_method = 'cash',
+        sale_date
+      } = customer;
+
+      const grandTotal = parseFloat(totals.total);
+      const discountAmount = parseFloat(totals.discount_amount || totals.discount || 0);
+      const restAmount = parseFloat(totals.rest_amount || 0);
+
+      // Validate payment logic
+      if (customerPaidAmount > grandTotal) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Customer paid amount cannot be greater than total amount'
+        });
+      }
+
+      // First create the customer sale mapping record
+      const customerSaleMapping = await CustomerSaleMapping.create({
+        total_amount: grandTotal,
         customer_name: customer_name ? customer_name.trim() : null,
         customer_phone: customer_phone ? customer_phone.trim() : null,
         payment_method,
-        sale_date: sale_date ? new Date(sale_date) : new Date()
+        sale_date: sale_date ? new Date(sale_date) : new Date(),
+        customer_paid: customerPaidAmount,
+        discount_amount: discountAmount > 0 ? discountAmount : null,
+        rest_amount: restAmount > 0 ? restAmount : null
       }, { transaction });
 
-      // Update product quantity (reduce by sold amount)
-      await product.update({
-        quantity: product.quantity - quantity_sold
-      }, { transaction });
+      const createdSales = [];
+      const updatedProducts = [];
 
-      // Fetch the created sale with associations
-      const createdSale = await Sale.findByPk(sale.id, {
+      // Process each item
+      for (const item of items) {
+        const {
+          product_id,
+          quantity,
+          unit_price,
+          total,
+          shop_id
+        } = item;
+
+        // Validate shop_id is provided
+        if (!shop_id) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: 'Shop ID is required for each item'
+          });
+        }
+
+        // Check if product exists and has enough quantity
+        const product = await Product.findByPk(product_id, { transaction });
+        if (!product) {
+          await transaction.rollback();
+          return res.status(404).json({
+            success: false,
+            message: `Product with ID ${product_id} not found`
+          });
+        }
+
+        if (product.quantity < quantity) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock for product ${product.product_name}. Available: ${product.quantity}, Requested: ${quantity}`
+          });
+        }
+
+        // Check if shop exists
+        const shopRecord = await Shop.findByPk(shop_id, { transaction });
+        if (!shopRecord) {
+          await transaction.rollback();
+          return res.status(404).json({
+            success: false,
+            message: `Shop with ID ${shop_id} not found`
+          });
+        }
+
+        // Create sale record for this item (linking to customer sale mapping)
+        const sale = await Sale.create({
+          product_id,
+          shop_id,
+          customer_sale_id: customerSaleMapping.id,
+          quantity_sold: parseInt(quantity),
+          unit_price: parseFloat(unit_price)
+        }, { transaction });
+
+        // Update product quantity (reduce by sold amount)
+        await product.update({
+          quantity: product.quantity - quantity
+        }, { transaction });
+
+        // Store for response
+        updatedProducts.push({
+          product_id,
+          old_quantity: product.quantity + quantity,
+          new_quantity: product.quantity - quantity,
+          sold_quantity: quantity
+        });
+
+        createdSales.push(sale.id);
+      }
+
+      // Fetch all created sales with associations
+      const salesWithDetails = await Sale.findAll({
+        where: {
+          id: createdSales
+        },
         include: [
           {
             model: Product,
@@ -108,6 +192,10 @@ class SalesController {
             model: Shop,
             as: 'shop',
             attributes: ['id', 'shop_name']
+          },
+          {
+            model: CustomerSaleMapping,
+            as: 'customerSale'
           }
         ],
         transaction
@@ -117,10 +205,22 @@ class SalesController {
 
       res.status(201).json({
         success: true,
-        message: 'Sale recorded successfully',
+        message: `Sale recorded successfully with ${items.length} items`,
         data: {
-          sale: createdSale,
-          updated_product_quantity: product.quantity - quantity_sold
+          customer_sale_mapping_id: customerSaleMapping.id,
+          sales: salesWithDetails,
+          transaction_summary: {
+            total_items: items.length,
+            grand_total: grandTotal,
+            customer_paid: customerPaidAmount,
+            discount_amount: discountAmount,
+            rest_amount: restAmount,
+            payment_method,
+            customer_name,
+            customer_phone,
+            sale_date: customerSaleMapping.sale_date
+          },
+          updated_products: updatedProducts
         }
       });
 
@@ -129,12 +229,13 @@ class SalesController {
       console.error('Error creating sale:', error);
       res.status(500).json({
         success: false,
-        message: 'Error recording sale'
+        message: 'Error recording sale',
+        error: error.message
       });
     }
   }
 
-  // Get all sales
+  // Get all sales (Customer-based data structure)
   static async getAllSales(req, res) {
     try {
       const { 
@@ -148,29 +249,28 @@ class SalesController {
         period = 'today' 
       } = req.query;
 
-      // Build where clause
-      const whereClause = {};
-      
       const isAllShops = typeof shop_id === 'string' && shop_id.trim().toLowerCase() === 'all';
-      if (shop_id && !isAllShops) whereClause.shop_id = shop_id;
-      if (product_id) whereClause.product_id = product_id;
-      if (payment_method) whereClause.payment_method = payment_method;
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+
+      // Build where clause for CustomerSaleMapping
+      const customerSaleWhereClause = {};
       
+      // Date and payment method filters for CustomerSaleMapping
       if (start_date && end_date) {
         const s = new Date(start_date);
         const e = new Date(end_date);
         e.setHours(23,59,59,999);
-        whereClause.sale_date = { [Op.between]: [s, e] };
+        customerSaleWhereClause.sale_date = { [Op.between]: [s, e] };
       } else if (start_date) {
         const s = new Date(start_date);
         const e = new Date(start_date);
         e.setHours(23,59,59,999);
-        whereClause.sale_date = { [Op.between]: [s, e] };
+        customerSaleWhereClause.sale_date = { [Op.between]: [s, e] };
       } else if (end_date) {
         const s = new Date(end_date);
         const e = new Date(end_date);
         e.setHours(23,59,59,999);
-        whereClause.sale_date = { [Op.between]: [s, e] };
+        customerSaleWhereClause.sale_date = { [Op.between]: [s, e] };
       } else if (period) {
         const now = new Date();
         let s, e;
@@ -193,50 +293,108 @@ class SalesController {
             s = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
         }
-        whereClause.sale_date = { [Op.between]: [s, e] };
+        customerSaleWhereClause.sale_date = { [Op.between]: [s, e] };
       }
 
-      const offset = (parseInt(page) - 1) * parseInt(limit);
+      if (payment_method) customerSaleWhereClause.payment_method = payment_method;
 
-      const sales = await Sale.findAndCountAll({
-        where: whereClause,
+      // Build where clause for Sale items filtering
+      const saleItemsWhereClause = {};
+      if (shop_id && !isAllShops) saleItemsWhereClause.shop_id = shop_id;
+      if (product_id) saleItemsWhereClause.product_id = product_id;
+
+      // First get CustomerSaleMapping records with pagination
+      const customerSales = await CustomerSaleMapping.findAndCountAll({
+        where: customerSaleWhereClause,
         include: [
           {
-            model: Product,
-            as: 'product',
-            attributes: ['id', 'product_name', 'length', 'width', 'thickness', 'weight'],
+            model: Sale,
+            as: 'sales', // Use correct association name
+            where: Object.keys(saleItemsWhereClause).length > 0 ? saleItemsWhereClause : undefined,
+            required: Object.keys(saleItemsWhereClause).length > 0, // INNER JOIN only if filtering by shop/product
             include: [
               {
-                model: Brand,
-                as: 'brand',
-                attributes: ['id', 'brand_name']
+                model: Product,
+                as: 'product',
+                attributes: ['id', 'product_name', 'length', 'width', 'thickness', 'weight'],
+                include: [
+                  {
+                    model: Brand,
+                    as: 'brand',
+                    attributes: ['id', 'brand_name']
+                  },
+                  {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'category_name']
+                  }
+                ]
               },
               {
-                model: Category,
-                as: 'category',
-                attributes: ['id', 'category_name']
+                model: Shop,
+                as: 'shop',
+                attributes: ['id', 'shop_name']
               }
             ]
-          },
-          {
-            model: Shop,
-            as: 'shop',
-            attributes: ['id', 'shop_name']
           }
         ],
         order: [['sale_date', 'DESC']],
         limit: parseInt(limit),
-        offset: offset
+        offset: offset,
+        distinct: true // Important for correct count with includes
+      });
+
+      // Transform the data to have a better structure
+      const transformedSales = customerSales.rows.map(customerSale => {
+        // Calculate totals from items
+        const totalItems = customerSale.sales ? customerSale.sales.length : 0;
+        const totalQuantity = customerSale.sales ? 
+          customerSale.sales.reduce((sum, item) => sum + item.quantity_sold, 0) : 0;
+        
+        // Get unique shops involved in this sale
+        const shopsInvolved = customerSale.sales ? 
+          [...new Set(customerSale.sales.map(item => item.shop.shop_name))] : [];
+
+        return {
+          id: customerSale.id,
+          customer_name: customerSale.customer_name,
+          customer_phone: customerSale.customer_phone,
+          payment_method: customerSale.payment_method,
+          sale_date: customerSale.sale_date,
+          total_amount: customerSale.total_amount,
+          customer_paid: customerSale.customer_paid,
+          discount_amount: customerSale.discount_amount,
+          rest_amount: customerSale.rest_amount,
+          createdAt: customerSale.createdAt,
+          updatedAt: customerSale.updatedAt,
+          
+          // Summary information
+          total_items: totalItems,
+          total_quantity: totalQuantity,
+          shops_involved: shopsInvolved,
+          
+          // Product details for modal/details view
+          items: customerSale.sales ? customerSale.sales.map(item => ({
+            id: item.id,
+            quantity_sold: item.quantity_sold,
+            unit_price: item.unit_price,
+            total_price: (parseFloat(item.unit_price) * item.quantity_sold).toFixed(2),
+            product: item.product,
+            shop: item.shop,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
+          })) : []
+        };
       });
 
       res.status(200).json({
         success: true,
         data: {
-          sales: sales.rows,
+          sales: transformedSales,
           pagination: {
             current_page: parseInt(page),
-            total_pages: Math.ceil(sales.count / parseInt(limit)),
-            total_records: sales.count,
+            total_pages: Math.ceil(customerSales.count / parseInt(limit)),
+            total_records: customerSales.count,
             per_page: parseInt(limit)
           }
         }
@@ -278,6 +436,10 @@ class SalesController {
             model: Shop,
             as: 'shop',
             attributes: ['id', 'shop_name']
+          },
+          {
+            model: CustomerSaleMapping,
+            as: 'customerSale'
           }
         ]
       });
@@ -303,7 +465,7 @@ class SalesController {
     }
   }
 
-  // Update sale (for corrections)
+  // Update sale (for corrections) - Single item update
   static async updateSale(req, res) {
     const transaction = await sequelize.transaction();
     
@@ -321,15 +483,26 @@ class SalesController {
       const { id } = req.params;
       const {
         quantity_sold,
+        unit_price,
+        // Customer sale mapping fields
         customer_name,
         customer_phone,
         payment_method,
         sale_date,
         total_amount,
-        unit_price
+        customer_paid,
+        discount_amount,
+        rest_amount
       } = req.body;
 
-      const sale = await Sale.findByPk(id, { transaction });
+      const sale = await Sale.findByPk(id, { 
+        include: [{
+          model: CustomerSaleMapping,
+          as: 'customerSale'
+        }],
+        transaction 
+      });
+      
       if (!sale) {
         await transaction.rollback();
         return res.status(404).json({
@@ -340,36 +513,117 @@ class SalesController {
 
       // Get the product to update quantity if quantity_sold changed
       const product = await Product.findByPk(sale.product_id, { transaction });
-      const oldQuantitySold = sale.quantity_sold;
-      const newQuantitySold = parseInt(quantity_sold);
-      const quantityDifference = newQuantitySold - oldQuantitySold;
+      
+      // Update sale record (only fields that belong to Sale table)
+      const saleUpdateData = {};
+      
+      if (quantity_sold !== undefined) {
+        const oldQuantitySold = sale.quantity_sold;
+        const newQuantitySold = parseInt(quantity_sold);
+        const quantityDifference = newQuantitySold - oldQuantitySold;
 
-      // Check if product has enough stock for the change
-      if (quantityDifference > 0 && product.quantity < quantityDifference) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for quantity increase. Available: ${product.quantity}, Required additional: ${quantityDifference}`
-        });
+        // Check if product has enough stock for the change
+        if (quantityDifference > 0 && product.quantity < quantityDifference) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock for quantity increase. Available: ${product.quantity}, Required additional: ${quantityDifference}`
+          });
+        }
+
+        saleUpdateData.quantity_sold = newQuantitySold;
+
+        // Update product quantity
+        await product.update({
+          quantity: product.quantity - quantityDifference
+        }, { transaction });
       }
 
-      // Update sale
-    //   const total_amount = parseFloat(unit_price) * newQuantitySold;
-      
-      await sale.update({
-        quantity_sold: newQuantitySold,
-        total_amount,
-        customer_name: customer_name ? customer_name.trim() : sale.customer_name,
-        customer_phone: customer_phone ? customer_phone.trim() : sale.customer_phone,
-        payment_method: payment_method || sale.payment_method,
-        sale_date: sale_date ? new Date(sale_date) : new Date(),
-        unit_price: parseFloat(unit_price) || null
-      }, { transaction });
+      if (unit_price !== undefined) {
+        saleUpdateData.unit_price = parseFloat(unit_price);
+      }
 
-      // Update product quantity
-      await product.update({
-        quantity: product.quantity - quantityDifference
-      }, { transaction });
+      // Update sale record if there are changes
+      if (Object.keys(saleUpdateData).length > 0) {
+        await sale.update(saleUpdateData, { transaction });
+      }
+
+      // Update customer sale mapping if customer-related fields are provided
+      if (sale.customerSale && (customer_name !== undefined || customer_phone !== undefined || 
+          payment_method !== undefined || sale_date !== undefined || total_amount !== undefined ||
+          customer_paid !== undefined || discount_amount !== undefined || rest_amount !== undefined)) {
+        
+        const customerSaleUpdateData = {};
+        
+        if (customer_name !== undefined) {
+          customerSaleUpdateData.customer_name = customer_name ? customer_name.trim() : null;
+        }
+        
+        if (customer_phone !== undefined) {
+          customerSaleUpdateData.customer_phone = customer_phone ? customer_phone.trim() : null;
+        }
+        
+        if (payment_method !== undefined) {
+          customerSaleUpdateData.payment_method = payment_method;
+        }
+        
+        if (sale_date !== undefined) {
+          customerSaleUpdateData.sale_date = sale_date ? new Date(sale_date) : new Date();
+        }
+        
+        if (total_amount !== undefined) {
+          customerSaleUpdateData.total_amount = parseFloat(total_amount);
+        }
+        
+        if (customer_paid !== undefined) {
+          const customerPaidAmount = parseFloat(customer_paid);
+          if (customerPaidAmount <= 0) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'Customer paid amount must be greater than 0'
+            });
+          }
+          customerSaleUpdateData.customer_paid = customerPaidAmount;
+          
+          // Recalculate discount and rest amounts
+          const totalAmt = customerSaleUpdateData.total_amount || sale.customerSale.total_amount;
+          
+          if (customerPaidAmount < totalAmt) {
+            if (discount_amount !== undefined && discount_amount !== null) {
+              customerSaleUpdateData.discount_amount = parseFloat(discount_amount);
+              if (customerPaidAmount + parseFloat(discount_amount) < totalAmt) {
+                customerSaleUpdateData.rest_amount = totalAmt - customerPaidAmount - parseFloat(discount_amount);
+              } else {
+                customerSaleUpdateData.rest_amount = null;
+              }
+            } else {
+              customerSaleUpdateData.discount_amount = totalAmt - customerPaidAmount;
+              customerSaleUpdateData.rest_amount = null;
+            }
+          } else if (customerPaidAmount > totalAmt) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'Customer paid amount cannot be greater than total amount'
+            });
+          } else {
+            customerSaleUpdateData.discount_amount = null;
+            customerSaleUpdateData.rest_amount = null;
+          }
+        }
+        
+        if (discount_amount !== undefined) {
+          customerSaleUpdateData.discount_amount = discount_amount !== null ? parseFloat(discount_amount) : null;
+        }
+        
+        if (rest_amount !== undefined) {
+          customerSaleUpdateData.rest_amount = rest_amount !== null ? parseFloat(rest_amount) : null;
+        }
+        
+        // Update customer sale mapping
+        await sale.customerSale.update(customerSaleUpdateData, { transaction });
+      }
 
       // Fetch updated sale with associations
       const updatedSale = await Sale.findByPk(id, {
@@ -394,6 +648,10 @@ class SalesController {
             model: Shop,
             as: 'shop',
             attributes: ['id', 'shop_name']
+          },
+          {
+            model: CustomerSaleMapping,
+            as: 'customerSale'
           }
         ],
         transaction
@@ -406,7 +664,8 @@ class SalesController {
         message: 'Sale updated successfully',
         data: {
           sale: updatedSale,
-          product_quantity_change: -quantityDifference
+          product_quantity_change: saleUpdateData.quantity_sold ? 
+            -(saleUpdateData.quantity_sold - (quantity_sold !== undefined ? parseInt(quantity_sold) - saleUpdateData.quantity_sold : 0)) : 0
         }
       });
 
