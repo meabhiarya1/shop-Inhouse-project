@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { X, Plus, Minus, Trash2, ShoppingCart, Package, DollarSign, User, Phone, Calendar, CreditCard, ArrowRight } from 'lucide-react';
 import { useCart } from '../context/CartContext.jsx';
 import { toast } from 'react-toastify';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 
 export default function CartModal() {
   const { 

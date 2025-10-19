@@ -1,13 +1,14 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import LoginPage from './components/LoginPage'
 import Dashboard from './components/Dashboard'
 import { useAuth } from './context/AuthContext'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import Salesboard from './components/Salesboard'
 import Products from './components/Products'
 import Categories from './components/Categories'
 import { CartProvider } from './context/CartContext'
 import CartModal from './components/CartModal'
+import { setupAxiosInterceptors } from './utils/axiosConfig'
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, initialized } = useAuth()
@@ -16,9 +17,25 @@ function PrivateRoute({ children }) {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  // Set up axios interceptors for automatic redirect on auth failure
+  useEffect(() => {
+    setupAxiosInterceptors(navigate, logout);
+  }, [navigate, logout]);
+
   return (
     <CartProvider>
       <Routes>
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute>
+              <Dashboard />
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/"
           element={
@@ -52,7 +69,7 @@ export default function App() {
           }
         />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
       <CartModal />
     </CartProvider>

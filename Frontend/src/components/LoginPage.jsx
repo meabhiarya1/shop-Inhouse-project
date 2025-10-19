@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useNavigate } from 'react-router-dom';
 
 export default function LoginInterface() {
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSignIn = async () => {
     setError('');
@@ -41,6 +50,8 @@ export default function LoginInterface() {
         login(data.data.token, data.data.user);
       }
       toast.success('Login successful');
+      // Navigate to dashboard after successful login
+      navigate('/dashboard');
     } catch (e) {
       const msg = e?.response?.data?.message || e.message || 'Login failed';
       setError(msg);

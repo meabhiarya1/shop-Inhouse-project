@@ -17,7 +17,7 @@ import {
   Search,
   Phone,
 } from "lucide-react";
-import axios from "axios";
+import axios from "../utils/axiosConfig";
 import { toast } from "react-toastify";
 import {
   DashboardProvider,
@@ -714,7 +714,7 @@ function SalesboardInner() {
                         {filteredSales.map((s) => (
                             <div
                               key={s.id}
-                              className="bg-white/5 rounded-xl p-4 border border-white/10 hover:border-white/20 transition-all group cursor-pointer"
+                              className="bg-white/5 rounded-xl px-4 py-2 border border-white/10 hover:border-white/20 transition-all group cursor-pointer"
                               onClick={() => openDetails(s)}
                             >
                               <div className="flex items-start justify-between mb-3">

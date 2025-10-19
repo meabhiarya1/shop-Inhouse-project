@@ -24,7 +24,7 @@ import {
   List,
   ShoppingCart,
 } from "lucide-react";
-import axios from "axios";
+import axios from "../utils/axiosConfig";
 import { toast } from "react-toastify";
 import Sidebar from "./Sidebar.jsx";
 import Pagination from "./Pagination.jsx";

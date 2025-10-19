@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import axios from "axios";
+import axios from "../utils/axiosConfig";
 import { useAuth } from "./AuthContext.jsx";
 
 const DashboardContext = createContext(null);
