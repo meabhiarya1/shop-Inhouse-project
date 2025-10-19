@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { 
-  Menu, 
-  Plus, 
-  Pencil, 
-  Trash2, 
+import {
+  Menu,
+  Plus,
+  Pencil,
+  Trash2,
   Info,
   Grid3X3,
   List,
@@ -15,7 +15,7 @@ import {
   User,
   CreditCard,
   Search,
-  Phone
+  Phone,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -37,17 +37,33 @@ function SalesboardInner() {
   const [sales, setSales] = useState([]);
   const [totalSales, setTotalSales] = useState(0);
   const [pagination, setPagination] = useState({
-    current_page: 1,
-    per_page: 12,
-    total_pages: 1,
+    currentPage: 1,
+    limit: 12,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
   });
   const [loading, setLoading] = useState(true);
   const location = useLocation();
-  
+
   // View mode and search state
   const [viewMode, setViewMode] = useState("grid"); // "grid" or "list"
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchPagination, setSearchPagination] = useState({
+    currentPage: 1,
+    limit: 12,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
+
+  // Filter states
+  const [filterWalkIn, setFilterWalkIn] = useState(false); // Filter for walk-in/anonymous customers
+  const [filterRestAmount, setFilterRestAmount] = useState(false); // Filter for sales with rest amount
 
   // Data for forms/modals
   const [createOpen, setCreateOpen] = useState(false);
@@ -191,9 +207,12 @@ function SalesboardInner() {
       setTotalSales(data?.data?.pagination?.total || 0);
       setPagination(
         data?.data?.pagination || {
-          current_page: page,
-          per_page: 12,
-          total_pages: 1,
+          currentPage: page,
+          limit: 12,
+          total: 0,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPrevPage: false,
         }
       );
     } catch (error) {
@@ -204,6 +223,97 @@ function SalesboardInner() {
       toast.error(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Search sales with API
+  const searchSalesApi = useCallback(
+    async (query, page = 1) => {
+      // Validate query
+      if (!query || query.trim().length < 2) {
+        setSearchResults(null);
+        setSearchTerm("");
+        setSales([]);
+        setPagination({
+          currentPage: 1,
+          limit: 12,
+          total: 0,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPrevPage: false,
+        });
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const params = {
+          q: query.trim(),
+          limit: 12,
+          page,
+        };
+
+        const { data } = await axios.get("/api/sales/search", {
+          params,
+          headers,
+        });
+
+        if (data?.success && data?.data?.sales) {
+          setSales(data.data.sales);
+          setSearchPagination(data.data.pagination || {
+            currentPage: page,
+            limit: 12,
+            total: 0,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPrevPage: false,
+          });
+          setSearchResults(true);
+        }
+      } catch (error) {
+        const msg =
+          error?.response?.data?.message ||
+          error.message ||
+          "Failed to search sales";
+        console.error("Search error:", error);
+        setSearchResults(true);
+        setSales([]);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [headers]
+  );
+
+  // Debounced search for sales
+  const debouncedSearchSales = useMemo(() => {
+    let timeoutId;
+    return (query) => {
+      clearTimeout(timeoutId);
+      if (!query || query.trim().length === 0) {
+        setSearchTerm("");
+        setSearchResults(null);
+        loadSales(1);
+        return;
+      }
+      setSearchTerm(query);
+      setIsSearching(true);
+      timeoutId = setTimeout(() => {
+        searchSalesApi(query, 1);
+      }, 500); // 500ms debounce
+    };
+  }, [searchSalesApi]);
+
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    debouncedSearchSales(value);
+  };
+
+  // Handle search pagination
+  const handleSearchPageChange = (page) => {
+    if (searchTerm && searchTerm.trim().length >= 2) {
+      searchSalesApi(searchTerm, page);
     }
   };
 
@@ -242,6 +352,27 @@ function SalesboardInner() {
     return isFinite(q * u) ? q * u : 0;
   }, [editForm.quantity_sold, editForm.unit_price]);
 
+  // Filter sales based on selected filters
+  const filteredSales = useMemo(() => {
+    let filtered = [...sales];
+
+    // Filter for walk-in/anonymous customers
+    if (filterWalkIn) {
+      filtered = filtered.filter(
+        (s) => !s.customer_name || s.customer_name.toLowerCase().includes('walk') || s.customer_name.toLowerCase().includes('anonymous')
+      );
+    }
+
+    // Filter for sales with rest amount (pending payment)
+    if (filterRestAmount) {
+      filtered = filtered.filter(
+        (s) => s.rest_amount && parseFloat(s.rest_amount) > 0
+      );
+    }
+
+    return filtered;
+  }, [sales, filterWalkIn, filterRestAmount]);
+
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
@@ -264,7 +395,7 @@ function SalesboardInner() {
       await axios.post("/api/sales", payload, { headers });
       toast.success("Sale created");
       setCreateOpen(false);
-      await loadSales(pagination.current_page || 1);
+  await loadSales(1);
     } catch (error) {
       const msg =
         error?.response?.data?.message ||
@@ -312,7 +443,7 @@ function SalesboardInner() {
       await axios.put(`/api/sales/${editForm.id}`, payload, { headers });
       toast.success("Sale updated");
       setEditOpen(false);
-      await loadSales(pagination.current_page || 1);
+  await loadSales(1);
     } catch (error) {
       const msg =
         error?.response?.data?.message ||
@@ -333,7 +464,7 @@ function SalesboardInner() {
       await axios.delete(`/api/sales/${activeSale.id}`, { headers });
       toast.success("Sale deleted");
       setDeleteOpen(false);
-      await loadSales(pagination.current_page || 1);
+      await loadSales(pagination.currentPage || 1);
     } catch (error) {
       const msg =
         error?.response?.data?.message ||
@@ -346,8 +477,8 @@ function SalesboardInner() {
   const openDetails = async (sale) => {
     // Since we now have customer-based sales data with items included,
     // we don't need to fetch individual sale details anymore
-    console.log('Opening details for sale:', sale);
-    console.log('Items in sale:', sale?.items);
+    console.log("Opening details for sale:", sale);
+    console.log("Items in sale:", sale?.items);
     setDetailsSale(sale);
     setDetailsOpen(true);
   };
@@ -360,9 +491,9 @@ function SalesboardInner() {
   // Listen for sale completion events to refresh data
   useEffect(() => {
     const handleSaleCompleted = (event) => {
-      console.log('Sale completed event received:', event.detail);
+      console.log("Sale completed event received:", event.detail);
       // Refresh sales data to show the new sale
-      loadSales(pagination.current_page || 1);
+      loadSales(pagination.currentPage || 1);
       // toast.success('Sales data refreshed!', {
       //   position: "top-right",
       //   autoClose: 2000,
@@ -374,13 +505,13 @@ function SalesboardInner() {
     };
 
     // Add event listener
-    window.addEventListener('saleCompleted', handleSaleCompleted);
+    window.addEventListener("saleCompleted", handleSaleCompleted);
 
     // Cleanup
     return () => {
-      window.removeEventListener('saleCompleted', handleSaleCompleted);
+      window.removeEventListener("saleCompleted", handleSaleCompleted);
     };
-  }, [pagination.current_page]); // Include pagination.current_page to get current page
+  }, [pagination.currentPage]); // Include pagination.currentPage to get current page
 
   return (
     <div className="w-full min-h-screen bg-[#0a0f1e] flex items-stretch justify-center relative overflow-hidden">
@@ -426,15 +557,64 @@ function SalesboardInner() {
             <div className="mb-4">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div className="text-white/70 text-sm">
-                  Period: {period.toUpperCase()} • Total: {pagination.total || sales.length} sales
-                  {pagination.total > 0 && (
-                    <span className="ml-2">
-                      (Page {pagination.current_page} of {pagination.total_pages})
-                    </span>
+                  {searchResults ? (
+                    <>
+                      Search Results: {searchPagination.total || 0} sales
+                      {searchPagination.total > 0 && (
+                        <span className="ml-2">
+                          (Page {searchPagination.currentPage} of{" "}
+                          {searchPagination.totalPages})
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      Period: {period.toUpperCase()} • Total:{" "}
+                      {pagination.total || sales.length} sales
+                      {(filterWalkIn || filterRestAmount) && filteredSales.length !== sales.length && (
+                        <span className="ml-2 text-indigo-400">
+                          (Showing {filteredSales.length} filtered)
+                        </span>
+                      )}
+                      {pagination.total > 0 && !filterWalkIn && !filterRestAmount && (
+                        <span className="ml-2">
+                          (Page {pagination.currentPage} of{" "}
+                          {pagination.totalPages})
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
 
                 <div className="flex items-center gap-3">
+                  {/* Filter Buttons */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setFilterWalkIn(!filterWalkIn)}
+                      className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border ${
+                        filterWalkIn
+                          ? "bg-purple-600 text-white border-purple-500"
+                          : "bg-white/5 text-white/70 hover:bg-white/10 border-white/10"
+                      }`}
+                      title={filterWalkIn ? "Remove Walk-in Filter" : "Filter Walk-in Customers"}
+                    >
+                      <User size={12} />
+                      <span className="hidden sm:inline text-[10px]">Walk-in</span>
+                    </button>
+                    <button
+                      onClick={() => setFilterRestAmount(!filterRestAmount)}
+                      className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border ${
+                        filterRestAmount
+                          ? "bg-red-600 text-white border-red-500"
+                          : "bg-white/5 text-white/70 hover:bg-white/10 border-white/10"
+                      }`}
+                      title={filterRestAmount ? "Remove Pending Filter" : "Filter Sales with Pending Amount"}
+                    >
+                      <DollarSign size={12} />
+                      <span className="hidden sm:inline text-[10px]">Pending</span>
+                    </button>
+                  </div>
+
                   {/* View Toggle */}
                   <div className="flex items-center bg-white/5 rounded-lg p-1 border border-white/10">
                     <button
@@ -469,14 +649,18 @@ function SalesboardInner() {
                       className="w-full h-10 pl-9 pr-8 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       placeholder="Search sales..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={handleSearchChange}
                     />
                     <div className="absolute inset-y-0 right-0 flex items-center pr-2">
                       {isSearching ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white/60"></div>
                       ) : searchTerm ? (
                         <button
-                          onClick={() => setSearchTerm("")}
+                          onClick={() => {
+                            setSearchTerm("");
+                            setSearchResults(null);
+                            loadSales(1);
+                          }}
                           className="text-white/60 hover:text-white"
                           title="Clear"
                         >
@@ -505,146 +689,207 @@ function SalesboardInner() {
                     <p className="text-white/60">Loading sales...</p>
                   </div>
                 </div>
-              ) : sales.filter(s => !searchTerm || 
-                s?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                s?.customer_phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                s?.shops_involved?.some(shop => shop.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                s?.items?.some(item => item?.product?.product_name?.toLowerCase().includes(searchTerm.toLowerCase()))
-              ).length === 0 ? (
+              ) : filteredSales.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-4">
                     <ShoppingCart size={32} className="text-white/40" />
                   </div>
-                  <h3 className="text-lg font-medium text-white/80 mb-2">No sales found</h3>
+                  <h3 className="text-lg font-medium text-white/80 mb-2">
+                    No sales found
+                  </h3>
                   <p className="text-white/60 text-center">
-                    {searchTerm ? "Try adjusting your search terms." : "No sales records available for the selected period."}
+                    {filterWalkIn || filterRestAmount
+                      ? "No sales match the selected filters."
+                      : searchTerm
+                      ? "Try adjusting your search terms."
+                      : "No sales records available for the selected period."}
                   </p>
                 </div>
               ) : (
                 <>
                   {viewMode === "grid" ? (
                     // Grid View - Customer Transaction Cards
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {sales.filter(s => !searchTerm || 
-                        s?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        s?.customer_phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        s?.shops_involved?.some(shop => shop.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                        s?.items?.some(item => item?.product?.product_name?.toLowerCase().includes(searchTerm.toLowerCase()))
-                      ).map((s) => (
-                        <div
-                          key={s.id}
-                          className="bg-white/5 rounded-xl p-4 border border-white/10 hover:border-white/20 transition-all group cursor-pointer"
-                          onClick={() => openDetails(s)}
-                        >
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center">
-                              <ShoppingCart size={20} className="text-green-400" />
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="bg-indigo-600/20 text-indigo-300 px-2 py-1 rounded-full text-xs font-medium">
-                                {s.total_items || 0} items
-                              </span>
-                              <span className="bg-purple-600/20 text-purple-300 px-2 py-1 rounded-full text-xs font-medium">
-                                {s.total_quantity || 0} qty
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="mb-3">
-                            <h3 className="font-medium capitalize text-white truncate mb-2">
-                              <avtar className="inline-block mr-2">
-                                <User size={16} className="text-white/60" />
-                              </avtar>
-                              {s.customer_name || "Walk-in Customer"}
-                            </h3>
-                            
-                            <div className="space-y-2">
-                              <div className="flex items-center space-x-2">
-                                <Phone size={14} className="text-white/40" />
-                                <span className="text-white/60 text-xs">
-                                  {s.customer_phone || "N/A"}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center space-x-2">
-                                <Calendar size={14} className="text-white/40" />
-                                <span className="text-white/60 text-xs">
-                                  {new Date(s.sale_date).toLocaleDateString()}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center space-x-2">
-                                <Package size={14} className="text-white/40" />
-                                <span className="text-white/60 text-xs capitalize">
-                                  {s.total_items || 0} items • {s.total_quantity || 0} qty
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center space-x-2">
-                                <Store size={14} className="text-white/40" />
-                                <span className="text-white/60 text-xs capitalize">
-                                  {s.shops_involved && s.shops_involved.length > 0 
-                                    ? s.shops_involved.length === 1 
-                                      ? s.shops_involved[0]
-                                      : `${s.shops_involved.length} shops`
-                                    : "N/A"}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center space-x-2">
-                                <CreditCard size={14} className="text-white/40"/>
-                                <span className="text-white/60 text-xs ">
-                                  {s.payment_method.toUpperCase() || "N/A"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2 mb-4">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-white/60">Total Amount:</span>
-                              <span className="text-green-400 font-bold">
-                                ₹{Number(s.total_amount || 0).toLocaleString("en-IN")}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-white/60">Paid:</span>
-                              <span className="text-white font-medium">
-                                ₹{Number(s.customer_paid || 0).toLocaleString("en-IN")}
-                              </span>
-                            </div>
-                            
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="text-white/60">Discount:</span>
-                                <span className="text-orange-400 font-medium">
-                                  {Number(s.discount_amount).toLocaleString("en-IN") ? `₹${Number(s.discount_amount).toLocaleString("en-IN")}` : "N/A"}
-                                </span>
-                              </div>
-                          
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-white/60">Rest Amount:</span>
-                              <span className={s.rest_amount && parseFloat(s.rest_amount) > 0 ? "text-red-400 font-medium" : "text-white/60"}>
-                                {s.rest_amount && parseFloat(s.rest_amount) > 0 
-                                  ? `₹${Number(s.rest_amount).toLocaleString("en-IN")}`
-                                  : "N/A"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-center gap-1 pt-2 border-t border-white/10">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openDetails(s);
-                              }}
-                              className="flex-1 px-2 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all text-xs flex items-center justify-center space-x-1"
+                    <div className="max-h-[440px] scroll-y-invisible overflow-y-auto">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {filteredSales.map((s) => (
+                            <div
+                              key={s.id}
+                              className="bg-white/5 rounded-xl p-4 border border-white/10 hover:border-white/20 transition-all group cursor-pointer"
+                              onClick={() => openDetails(s)}
                             >
-                              <Info size={12} />
-                              <span className="hidden sm:inline">View Items</span>
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center">
+                                  <ShoppingCart
+                                    size={20}
+                                    className="text-green-400"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="bg-indigo-600/20 text-indigo-300 px-2 py-1 rounded-full text-xs font-medium">
+                                    {s.total_items || 0} items
+                                  </span>
+                                  <span className="bg-purple-600/20 text-purple-300 px-2 py-1 rounded-full text-xs font-medium">
+                                    {s.total_quantity || 0} qty
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="mb-3">
+                                <h3 className="font-medium capitalize text-white truncate mb-2">
+                                  <avtar className="inline-block mr-2">
+                                    <User size={16} className="text-white/60" />
+                                  </avtar>
+                                  {s.customer_name || "Walk-in Customer"}
+                                </h3>
+
+                                <div className="space-y-2">
+                                  <div className="flex items-center space-x-2">
+                                    <Phone
+                                      size={14}
+                                      className="text-white/40"
+                                    />
+                                    <span className="text-white/60 text-xs">
+                                      {s.customer_phone || "N/A"}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center space-x-2">
+                                    <Calendar
+                                      size={14}
+                                      className="text-white/40"
+                                    />
+                                    <span className="text-white/60 text-xs">
+                                      {new Date(
+                                        s.sale_date
+                                      ).toLocaleDateString()}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center space-x-2">
+                                    <Package
+                                      size={14}
+                                      className="text-white/40"
+                                    />
+                                    <span className="text-white/60 text-xs capitalize">
+                                      {s.total_items || 0} items •{" "}
+                                      {s.total_quantity || 0} qty
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center space-x-2">
+                                    <Store
+                                      size={14}
+                                      className="text-white/40"
+                                    />
+                                    <span className="text-white/60 text-xs capitalize">
+                                      {s.shops_involved &&
+                                      s.shops_involved.length > 0
+                                        ? s.shops_involved.length === 1
+                                          ? s.shops_involved[0]
+                                          : `${s.shops_involved.length} shops`
+                                        : "N/A"}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center space-x-2">
+                                    <CreditCard
+                                      size={14}
+                                      className="text-white/40"
+                                    />
+                                    <span className="text-white/60 text-xs ">
+                                      {s.payment_method.toUpperCase() || "N/A"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2 mb-4">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-white/60">
+                                    Total Amount:
+                                  </span>
+                                  <span className="text-green-400 font-bold">
+                                    ₹
+                                    {Number(s.total_amount || 0).toLocaleString(
+                                      "en-IN"
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-white/60">Paid:</span>
+                                  <span className="text-white font-medium">
+                                    ₹
+                                    {Number(
+                                      s.customer_paid || 0
+                                    ).toLocaleString("en-IN")}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-white/60">
+                                    Discount:
+                                  </span>
+                                  <span className="text-orange-400 font-medium">
+                                    {Number(s.discount_amount).toLocaleString(
+                                      "en-IN"
+                                    )
+                                      ? `₹${Number(
+                                          s.discount_amount
+                                        ).toLocaleString("en-IN")}`
+                                      : "N/A"}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-white/60">
+                                    Rest Amount:
+                                  </span>
+                                  <span
+                                    className={
+                                      s.rest_amount &&
+                                      parseFloat(s.rest_amount) > 0
+                                        ? "text-red-400 font-medium"
+                                        : "text-white/60"
+                                    }
+                                  >
+                                    {s.rest_amount &&
+                                    parseFloat(s.rest_amount) > 0
+                                      ? `₹${Number(
+                                          s.rest_amount
+                                        ).toLocaleString("en-IN")}`
+                                      : "N/A"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 pt-3 pb-3 border-t border-white/10">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEdit(s);
+                                  }}
+                                  className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all text-xs flex items-center justify-center"
+                                  title="Edit Sale"
+                                  style={{ minWidth: 0 }}
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDetails(s);
+                                  }}
+                                  className="flex-1 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all text-xs flex items-center justify-center space-x-1"
+                                  title="View Items"
+                                  style={{ minWidth: 0 }}
+                                >
+                                  <Info size={15} />
+                                  <span className="hidden sm:inline">View Items</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
                     </div>
                   ) : (
                     // List View (Table) - Customer Transaction Table
@@ -653,103 +898,158 @@ function SalesboardInner() {
                         <table className="min-w-full table-fixed text-sm">
                           <thead className="sticky top-0 z-10 bg-[#121a3d] text-white/70">
                             <tr>
-                              <th className="text-left p-3 font-medium">Customer</th>
-                              <th className="text-left p-3 font-medium">Shops</th>
-                              <th className="text-center p-3 w-20 font-medium">Items</th>
-                              <th className="text-center p-3 w-20 font-medium">Qty</th>
-                              <th className="text-right p-3 w-32 font-medium">Total</th>
-                              <th className="text-right p-3 w-32 font-medium">Paid</th>
-                              <th className="text-left p-3 w-24 font-medium">Payment</th>
-                              <th className="text-center p-3 w-32 font-medium">Actions</th>
+                              <th className="text-left p-3 font-medium">
+                                Customer
+                              </th>
+                              <th className="text-left p-3 font-medium">
+                                Shops
+                              </th>
+                              <th className="text-center p-3 w-20 font-medium">
+                                Items
+                              </th>
+                              <th className="text-center p-3 w-20 font-medium">
+                                Qty
+                              </th>
+                              <th className="text-right p-3 w-32 font-medium">
+                                Total
+                              </th>
+                              <th className="text-right p-3 w-32 font-medium">
+                                Paid
+                              </th>
+                              <th className="text-left p-3 w-24 font-medium">
+                                Payment
+                              </th>
+                              <th className="text-center p-3 w-32 font-medium">
+                                Actions
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
-                            {sales.filter(s => !searchTerm || 
-                              s?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              s?.customer_phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              s?.shops_involved?.some(shop => shop.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                              s?.items?.some(item => item?.product?.product_name?.toLowerCase().includes(searchTerm.toLowerCase()))
-                            ).map((s) => (
-                              <tr
-                                key={s.id}
-                                className="border-t border-white/10 hover:bg-white/5 transition-colors"
-                              >
-                                <td className="p-3">
-                                  <div className="flex items-center space-x-3">
-                                    <div className="w-8 h-8 bg-green-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                                      <User size={16} className="text-green-400" />
-                                    </div>
-                                    <div>
-                                      <div className="text-white font-medium text-sm capitalize">
-                                        {s.customer_name || "Anonymous"}
+                            {filteredSales.map((s) => (
+                                <tr
+                                  key={s.id}
+                                  className="border-t border-white/10 hover:bg-white/5 transition-colors"
+                                >
+                                  <td className="p-3">
+                                    <div className="flex items-center space-x-3">
+                                      <div className="w-8 h-8 bg-green-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <User
+                                          size={16}
+                                          className="text-green-400"
+                                        />
                                       </div>
-                                      <div className="text-white/50 text-xs">
-                                        {s.customer_phone || "N/A"}
-                                      </div>
-                                      <div className="text-white/40 text-xs">
-                                        {new Date(s.sale_date).toLocaleDateString()}
+                                      <div>
+                                        <div className="text-white font-medium text-sm capitalize">
+                                          {s.customer_name || "Anonymous"}
+                                        </div>
+                                        <div className="text-white/50 text-xs">
+                                          {s.customer_phone || "N/A"}
+                                        </div>
+                                        <div className="text-white/40 text-xs">
+                                          {new Date(
+                                            s.sale_date
+                                          ).toLocaleDateString()}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                </td>
-                                <td className="p-3">
-                                  <div className="text-white/70 text-xs">
-                                    {s.shops_involved && s.shops_involved.length > 0 
-                                      ? s.shops_involved.length === 1 
-                                        ? s.shops_involved[0]
-                                        : `${s.shops_involved[0]} ${s.shops_involved.length > 1 ? `+${s.shops_involved.length - 1} more` : ''}`
-                                      : "N/A"}
-                                  </div>
-                                </td>
-                                <td className="p-3 text-center">
-                                  <span className="bg-indigo-600/20 text-indigo-300 px-2 py-1 rounded-full text-xs font-medium">
-                                    {s.total_items || 0}
-                                  </span>
-                                </td>
-                                <td className="p-3 text-center">
-                                  <span className="bg-white/10 px-2 py-1 rounded-full text-xs">
-                                    {s.total_quantity || 0}
-                                  </span>
-                                </td>
-                                <td className="p-3 text-right font-bold text-green-400">
-                                  ₹{Number(s.total_amount || 0).toLocaleString("en-IN")}
-                                </td>
-                                <td className="p-3 text-right">
-                                  <div className="text-white font-medium">
-                                    ₹{Number(s.customer_paid || 0).toLocaleString("en-IN")}
-                                  </div>
-                                  {s.discount_amount && parseFloat(s.discount_amount) > 0 && (
-                                    <div className="text-orange-400 text-xs">
-                                      -₹{Number(s.discount_amount).toLocaleString("en-IN")}
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="text-white/70 text-xs">
+                                      {s.shops_involved &&
+                                      s.shops_involved.length > 0
+                                        ? s.shops_involved.length === 1
+                                          ? s.shops_involved[0]
+                                          : `${s.shops_involved[0]} ${
+                                              s.shops_involved.length > 1
+                                                ? `+${
+                                                    s.shops_involved.length - 1
+                                                  } more`
+                                                : ""
+                                            }`
+                                        : "N/A"}
                                     </div>
-                                  )}
-                                  <div className={s.rest_amount && parseFloat(s.rest_amount) > 0 ? "text-red-400 text-xs" : "text-white/60 text-xs"}>
-                                    Due: {s.rest_amount && parseFloat(s.rest_amount) > 0 
-                                      ? `₹${Number(s.rest_amount).toLocaleString("en-IN")}`
-                                      : "N/A"}
-                                  </div>
-                                </td>
-                                <td className="p-3">
-                                  <div className="flex items-center space-x-1">
-                                    <CreditCard size={12} className="text-white/40" />
-                                    <span className="capitalize text-xs">
-                                      {s.payment_method.toUpperCase() || "N/A"}
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <span className="bg-indigo-600/20 text-indigo-300 px-2 py-1 rounded-full text-xs font-medium">
+                                      {s.total_items || 0}
                                     </span>
-                                  </div>
-                                </td>
-                                <td className="p-3">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <button
-                                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all border border-white/10"
-                                      onClick={() => openDetails(s)}
-                                      title="View Items"
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <span className="bg-white/10 px-2 py-1 rounded-full text-xs">
+                                      {s.total_quantity || 0}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-right font-bold text-green-400">
+                                    ₹
+                                    {Number(s.total_amount || 0).toLocaleString(
+                                      "en-IN"
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    <div className="text-white font-medium">
+                                      ₹
+                                      {Number(
+                                        s.customer_paid || 0
+                                      ).toLocaleString("en-IN")}
+                                    </div>
+                                    {s.discount_amount &&
+                                      parseFloat(s.discount_amount) > 0 && (
+                                        <div className="text-orange-400 text-xs">
+                                          -₹
+                                          {Number(
+                                            s.discount_amount
+                                          ).toLocaleString("en-IN")}
+                                        </div>
+                                      )}
+                                    <div
+                                      className={
+                                        s.rest_amount &&
+                                        parseFloat(s.rest_amount) > 0
+                                          ? "text-red-400 text-xs"
+                                          : "text-white/60 text-xs"
+                                      }
                                     >
-                                      <Info size={14} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
+                                      Due:{" "}
+                                      {s.rest_amount &&
+                                      parseFloat(s.rest_amount) > 0
+                                        ? `₹${Number(
+                                            s.rest_amount
+                                          ).toLocaleString("en-IN")}`
+                                        : "N/A"}
+                                    </div>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="flex items-center space-x-1">
+                                      <CreditCard
+                                        size={12}
+                                        className="text-white/40"
+                                      />
+                                      <span className="capitalize text-xs">
+                                        {s.payment_method.toUpperCase() ||
+                                          "N/A"}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all border border-white/10"
+                                        onClick={() => openEdit(s)}
+                                        title="Edit Sale"
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all border border-white/10"
+                                        onClick={() => openDetails(s)}
+                                        title="View Items"
+                                      >
+                                        <Info size={14} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
                           </tbody>
                         </table>
                       </div>
@@ -761,11 +1061,17 @@ function SalesboardInner() {
               {sales.length > 0 && (
                 <div className="mt-5">
                   <Pagination
-                    currentPage={pagination.current_page}
-                    totalPages={pagination.total_pages}
-                    onPageChange={(page) => loadSales(page)}
-                    totalItems={totalSales}
-                    pageSize={pagination.per_page}
+                    currentPage={searchResults ? searchPagination.currentPage : pagination.currentPage}
+                    totalPages={searchResults ? searchPagination.totalPages : pagination.totalPages}
+                    onPageChange={(page) => {
+                      if (searchResults && searchTerm) {
+                        handleSearchPageChange(page);
+                      } else {
+                        loadSales(page);
+                      }
+                    }}
+                    total={searchResults ? searchPagination.total : pagination.total}
+                    limit={searchResults ? searchPagination.limit : pagination.limit}
                   />
                 </div>
               )}
@@ -1048,7 +1354,9 @@ function SalesboardInner() {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-white">Edit Sale</h3>
-                    <p className="text-white/60 text-sm">Update sale information</p>
+                    <p className="text-white/60 text-sm">
+                      Update sale information
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1068,9 +1376,11 @@ function SalesboardInner() {
                 <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
                   <div className="flex items-center space-x-2 mb-4">
                     <Package size={18} className="text-indigo-400" />
-                    <h4 className="font-semibold text-white">Quantity & Price</h4>
+                    <h4 className="font-semibold text-white">
+                      Quantity & Price
+                    </h4>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
@@ -1090,7 +1400,7 @@ function SalesboardInner() {
                         }
                       />
                     </div>
-                    
+
                     <div>
                       <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
                         <DollarSign size={14} />
@@ -1102,7 +1412,10 @@ function SalesboardInner() {
                         className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 transition-all"
                         value={editForm.unit_price}
                         onChange={(e) =>
-                          setEditForm({ ...editForm, unit_price: e.target.value })
+                          setEditForm({
+                            ...editForm,
+                            unit_price: e.target.value,
+                          })
                         }
                       />
                     </div>
@@ -1113,9 +1426,11 @@ function SalesboardInner() {
                 <div className="bg-gradient-to-br from-green-600/10 to-emerald-600/10 rounded-xl p-4 border border-green-600/20 h-full">
                   <div className="flex items-center space-x-2 mb-4">
                     <DollarSign size={18} className="text-green-400" />
-                    <h4 className="font-semibold text-white">Payment Details</h4>
+                    <h4 className="font-semibold text-white">
+                      Payment Details
+                    </h4>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
@@ -1134,14 +1449,19 @@ function SalesboardInner() {
                       >
                         {["cash", "card", "upi", "bank_transfer", "credit"].map(
                           (m) => (
-                            <option key={m} value={m} className="bg-[#0f1535] text-white">
-                              {m.charAt(0).toUpperCase() + m.slice(1).replace('_', ' ')}
+                            <option
+                              key={m}
+                              value={m}
+                              className="bg-[#0f1535] text-white"
+                            >
+                              {m.charAt(0).toUpperCase() +
+                                m.slice(1).replace("_", " ")}
                             </option>
                           )
                         )}
                       </select>
                     </div>
-                    
+
                     <div>
                       <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
                         <DollarSign size={14} />
@@ -1160,9 +1480,11 @@ function SalesboardInner() {
                 <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
                   <div className="flex items-center space-x-2 mb-4">
                     <User size={18} className="text-purple-400" />
-                    <h4 className="font-semibold text-white">Customer Information</h4>
+                    <h4 className="font-semibold text-white">
+                      Customer Information
+                    </h4>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
@@ -1182,7 +1504,7 @@ function SalesboardInner() {
                         }
                       />
                     </div>
-                    
+
                     <div>
                       <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
                         <Phone size={14} />
@@ -1208,9 +1530,11 @@ function SalesboardInner() {
                 <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
                   <div className="flex items-center space-x-2 mb-4">
                     <Calendar size={18} className="text-blue-400" />
-                    <h4 className="font-semibold text-white">Sale Date & Time</h4>
+                    <h4 className="font-semibold text-white">
+                      Sale Date & Time
+                    </h4>
                   </div>
-                  
+
                   <div className="flex flex-col justify-center h-full">
                     <div>
                       <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
@@ -1222,7 +1546,10 @@ function SalesboardInner() {
                         className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all"
                         value={editForm.sale_date}
                         onChange={(e) =>
-                          setEditForm({ ...editForm, sale_date: e.target.value })
+                          setEditForm({
+                            ...editForm,
+                            sale_date: e.target.value,
+                          })
                         }
                       />
                     </div>
@@ -1290,8 +1617,12 @@ function SalesboardInner() {
                     <ShoppingCart size={24} className="text-green-400" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white">Transaction Details</h3>
-                    <p className="text-white/60 text-sm">Customer Purchase Information</p>
+                    <h3 className="text-xl font-bold text-white">
+                      Transaction Details
+                    </h3>
+                    <p className="text-white/60 text-sm">
+                      Customer Purchase Information
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1313,17 +1644,21 @@ function SalesboardInner() {
                     <User size={20} className="text-purple-400" />
                     <h4 className="font-semibold text-white">Customer</h4>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div>
-                      <span className="text-white/60 text-xs block mb-1">Name</span>
+                      <span className="text-white/60 text-xs block mb-1">
+                        Name
+                      </span>
                       <span className="text-white capitalize text-sm font-medium">
                         {detailsSale?.customer_name || "Anonymous Customer"}
                       </span>
                     </div>
-                    
+
                     <div>
-                      <span className="text-white/60 text-xs block mb-1">Phone</span>
+                      <span className="text-white/60 text-xs block mb-1">
+                        Phone
+                      </span>
                       <div className="flex items-center space-x-2">
                         <Phone size={12} className="text-white/40" />
                         <span className="text-white text-sm">
@@ -1331,9 +1666,11 @@ function SalesboardInner() {
                         </span>
                       </div>
                     </div>
-                    
+
                     <div>
-                      <span className="text-white/60 text-xs block mb-1">Date & Time</span>
+                      <span className="text-white/60 text-xs block mb-1">
+                        Date & Time
+                      </span>
                       <span className="text-white text-sm">
                         {detailsSale?.sale_date
                           ? new Date(detailsSale.sale_date).toLocaleString()
@@ -1349,42 +1686,68 @@ function SalesboardInner() {
                     <DollarSign size={20} className="text-green-400" />
                     <h4 className="font-semibold text-white">Payment</h4>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-white/60 text-xs">Total Amount</span>
+                      <span className="text-white/60 text-xs">
+                        Total Amount
+                      </span>
                       <span className="text-green-400 font-bold text-base">
-                        ₹{Number(detailsSale?.total_amount || 0).toLocaleString("en-IN")}
+                        ₹
+                        {Number(detailsSale?.total_amount || 0).toLocaleString(
+                          "en-IN"
+                        )}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-white/60 text-xs">Amount Paid</span>
                       <span className="text-white font-medium text-sm">
-                        ₹{Number(detailsSale?.customer_paid || 0).toLocaleString("en-IN")}
+                        ₹
+                        {Number(detailsSale?.customer_paid || 0).toLocaleString(
+                          "en-IN"
+                        )}
                       </span>
                     </div>
-                    
-                    {detailsSale?.discount_amount && parseFloat(detailsSale.discount_amount) > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/60 text-xs">Discount</span>
-                        <span className="text-orange-400 font-medium text-sm">
-                          ₹{Number(detailsSale.discount_amount).toLocaleString("en-IN")}
-                        </span>
-                      </div>
-                    )}
-                    
+
+                    {detailsSale?.discount_amount &&
+                      parseFloat(detailsSale.discount_amount) > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/60 text-xs">
+                            Discount
+                          </span>
+                          <span className="text-orange-400 font-medium text-sm">
+                            ₹
+                            {Number(detailsSale.discount_amount).toLocaleString(
+                              "en-IN"
+                            )}
+                          </span>
+                        </div>
+                      )}
+
                     <div className="flex items-center justify-between">
                       <span className="text-white/60 text-xs">Rest Amount</span>
-                      <span className={detailsSale?.rest_amount && parseFloat(detailsSale.rest_amount) > 0 ? "text-red-400 font-medium" : "text-white/60"}>
-                        {detailsSale?.rest_amount && parseFloat(detailsSale.rest_amount) > 0 
-                          ? `₹${Number(detailsSale.rest_amount).toLocaleString("en-IN")}`
+                      <span
+                        className={
+                          detailsSale?.rest_amount &&
+                          parseFloat(detailsSale.rest_amount) > 0
+                            ? "text-red-400 font-medium"
+                            : "text-white/60"
+                        }
+                      >
+                        {detailsSale?.rest_amount &&
+                        parseFloat(detailsSale.rest_amount) > 0
+                          ? `₹${Number(detailsSale.rest_amount).toLocaleString(
+                              "en-IN"
+                            )}`
                           : "N/A"}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                      <span className="text-white/60 text-xs">Payment Method</span>
+                      <span className="text-white/60 text-xs">
+                        Payment Method
+                      </span>
                       <div className="flex items-center space-x-2">
                         <CreditCard size={12} className="text-white/40" />
                         <span className="text-white capitalize text-sm">
@@ -1401,7 +1764,7 @@ function SalesboardInner() {
                     <Package size={20} className="text-blue-400" />
                     <h4 className="font-semibold text-white">Order Summary</h4>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-white/60 text-xs">Total Items</span>
@@ -1409,30 +1772,41 @@ function SalesboardInner() {
                         {detailsSale?.total_items || 0}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
-                      <span className="text-white/60 text-xs">Total Quantity</span>
+                      <span className="text-white/60 text-xs">
+                        Total Quantity
+                      </span>
                       <span className="bg-white/10 px-3 py-1 rounded-full text-sm font-medium">
                         {detailsSale?.total_quantity || 0}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
-                      <span className="text-white/60 text-xs">Shops Involved</span>
+                      <span className="text-white/60 text-xs">
+                        Shops Involved
+                      </span>
                       <span className="text-white font-medium text-sm">
                         {detailsSale?.shops_involved?.length || 0}
                       </span>
                     </div>
-                    
+
                     <div className="pt-2 border-t border-white/10">
-                      <span className="text-white/60 text-xs block mb-1">Shop Names</span>
+                      <span className="text-white/60 text-xs block mb-1">
+                        Shop Names
+                      </span>
                       <div className="space-y-1">
                         {detailsSale?.shops_involved?.map((shop, index) => (
-                          <div key={index} className="text-white text-xs flex items-center space-x-2">
+                          <div
+                            key={index}
+                            className="text-white text-xs flex items-center space-x-2"
+                          >
                             <Store size={10} className="text-white/40" />
                             <span>{shop}</span>
                           </div>
-                        )) || <span className="text-white/40 text-xs">N/A</span>}
+                        )) || (
+                          <span className="text-white/40 text-xs">N/A</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1445,34 +1819,51 @@ function SalesboardInner() {
                   <Package size={20} className="text-indigo-400" />
                   <h4 className="font-semibold text-white">Items Purchased</h4>
                 </div>
-                
+
                 <div className="overflow-x-auto max-h-80 scroll-y-invisible">
                   <table className="min-w-full text-sm">
                     <thead className="bg-white/5 text-white/70">
                       <tr>
                         <th className="text-left p-3 font-medium">Product</th>
                         <th className="text-left p-3 font-medium">Shop</th>
-                        <th className="text-left p-3 font-medium">Brand/Category</th>
-                        <th className="text-center p-3 w-20 font-medium">Qty</th>
-                        <th className="text-right p-3 w-32 font-medium">Unit Price</th>
-                        <th className="text-right p-3 w-32 font-medium">Total</th>
+                        <th className="text-left p-3 font-medium">
+                          Brand/Category
+                        </th>
+                        <th className="text-center p-3 w-20 font-medium">
+                          Qty
+                        </th>
+                        <th className="text-right p-3 w-32 font-medium">
+                          Unit Price
+                        </th>
+                        <th className="text-right p-3 w-32 font-medium">
+                          Total
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {detailsSale?.items && detailsSale.items.length > 0 ? (
                         detailsSale.items.map((item, index) => (
-                          <tr key={item.id || index} className="border-t border-white/10 hover:bg-white/5 transition-colors">
+                          <tr
+                            key={item.id || index}
+                            className="border-t border-white/10 hover:bg-white/5 transition-colors"
+                          >
                             <td className="p-3">
                               <div className="flex items-center space-x-3">
                                 <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <Package size={16} className="text-indigo-400" />
+                                  <Package
+                                    size={16}
+                                    className="text-indigo-400"
+                                  />
                                 </div>
                                 <div>
                                   <div className="text-white font-medium capitalize">
                                     {item?.product?.product_name || "N/A"}
                                   </div>
                                   <div className="text-white/40 text-xs">
-                                    ID: {item?.product?.id || item?.product_id || "N/A"}
+                                    ID:{" "}
+                                    {item?.product?.id ||
+                                      item?.product_id ||
+                                      "N/A"}
                                   </div>
                                 </div>
                               </div>
@@ -1488,20 +1879,28 @@ function SalesboardInner() {
                             <td className="p-3">
                               <div className="space-y-1">
                                 <div className="text-white/70 text-xs capitalize">
-                                  <strong>Brand:</strong> {item?.product?.brand?.brand_name || "N/A"}
+                                  <strong>Brand:</strong>{" "}
+                                  {item?.product?.brand?.brand_name || "N/A"}
                                 </div>
                                 <div className="text-white/60 text-xs capitalize">
-                                  <strong>Category:</strong> {item?.product?.category?.category_name || "N/A"}
+                                  <strong>Category:</strong>{" "}
+                                  {item?.product?.category?.category_name ||
+                                    "N/A"}
                                 </div>
-                                {item?.product?.length && item?.product?.width && (
-                                  <div className="text-white/50 text-xs">
-                                    <strong>Size:</strong> {item.product.length} × {item.product.width}
-                                    {item?.product?.thickness && ` × ${item.product.thickness}`}
-                                  </div>
-                                )}
+                                {item?.product?.length &&
+                                  item?.product?.width && (
+                                    <div className="text-white/50 text-xs">
+                                      <strong>Size:</strong>{" "}
+                                      {item.product.length} ×{" "}
+                                      {item.product.width}
+                                      {item?.product?.thickness &&
+                                        ` × ${item.product.thickness}`}
+                                    </div>
+                                  )}
                                 {item?.product?.weight && (
                                   <div className="text-white/50 text-xs">
-                                    <strong>Weight:</strong> {item.product.weight} kg
+                                    <strong>Weight:</strong>{" "}
+                                    {item.product.weight} kg
                                   </div>
                                 )}
                               </div>
@@ -1514,20 +1913,28 @@ function SalesboardInner() {
                             <td className="p-3 text-right">
                               <span className="text-white font-medium">
                                 {item?.unit_price != null
-                                  ? `₹${Number(item.unit_price).toLocaleString("en-IN")}`
+                                  ? `₹${Number(item.unit_price).toLocaleString(
+                                      "en-IN"
+                                    )}`
                                   : "N/A"}
                               </span>
                             </td>
                             <td className="p-3 text-right">
                               <span className="text-green-400 font-bold">
-                                ₹{Number(item?.total_price || 0).toLocaleString("en-IN")}
+                                ₹
+                                {Number(item?.total_price || 0).toLocaleString(
+                                  "en-IN"
+                                )}
                               </span>
                             </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="6" className="p-6 text-center text-white/40">
+                          <td
+                            colSpan="6"
+                            className="p-6 text-center text-white/40"
+                          >
                             No items found in this transaction
                           </td>
                         </tr>

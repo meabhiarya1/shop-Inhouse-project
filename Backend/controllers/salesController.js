@@ -1,3 +1,4 @@
+
 const { validationResult } = require('express-validator');
 const { sequelize } = require('../config/database');
 const Sale = require('../models/Sale');
@@ -387,15 +388,22 @@ class SalesController {
         };
       });
 
+      const currentPage = parseInt(page);
+      const perPage = parseInt(limit);
+      const totalRecords = customerSales.count;
+      const totalPages = Math.ceil(totalRecords / perPage);
+
       res.status(200).json({
         success: true,
         data: {
           sales: transformedSales,
           pagination: {
-            current_page: parseInt(page),
-            total_pages: Math.ceil(customerSales.count / parseInt(limit)),
-            total_records: customerSales.count,
-            per_page: parseInt(limit)
+            currentPage: currentPage,
+            limit: perPage,
+            total: totalRecords,
+            totalPages: totalPages,
+            hasNextPage: currentPage < totalPages,
+            hasPrevPage: currentPage > 1
           }
         }
       });
@@ -721,6 +729,235 @@ class SalesController {
       res.status(500).json({
         success: false,
         message: 'Error deleting sale'
+      });
+    }
+  }
+  
+    // Search sales by query (customer name, phone, shop, product, etc.)
+  static async searchSales(req, res) {
+    try {
+      const { q = "", limit = 50, page = 1 } = req.query;
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+      
+      if (!q || q.trim().length < 2) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Query string must be at least 2 characters" 
+        });
+      }
+
+      const searchQuery = q.trim();
+
+      // Build search conditions for customer name and phone (case-insensitive for MySQL)
+      const searchCondition = {
+        [Op.or]: [
+          sequelize.where(
+            sequelize.fn('LOWER', sequelize.col('customer_name')),
+            'LIKE',
+            `%${searchQuery.toLowerCase()}%`
+          ),
+          sequelize.where(
+            sequelize.fn('LOWER', sequelize.col('customer_phone')),
+            'LIKE',
+            `%${searchQuery.toLowerCase()}%`
+          )
+        ]
+      };
+
+      // Find matching CustomerSaleMappings with related sales data
+      const customerSales = await CustomerSaleMapping.findAndCountAll({
+        where: searchCondition,
+        include: [
+          {
+            model: Sale,
+            as: "sales",
+            required: false,
+            include: [
+              {
+                model: Product,
+                as: "product",
+                required: false,
+                attributes: ['id', 'product_name', 'length', 'width', 'thickness', 'weight'],
+                include: [
+                  { 
+                    model: Brand, 
+                    as: "brand", 
+                    attributes: ["id", "brand_name"] 
+                  },
+                  { 
+                    model: Category, 
+                    as: "category", 
+                    attributes: ["id", "category_name"] 
+                  }
+                ]
+              },
+              {
+                model: Shop,
+                as: "shop",
+                required: false,
+                attributes: ["id", "shop_name"]
+              }
+            ]
+          }
+        ],
+        order: [["sale_date", "DESC"]],
+        limit: parseInt(limit),
+        offset,
+        distinct: true,
+        subQuery: false
+      });
+
+      // Also search in products and shops separately for better results
+      const productMatches = await CustomerSaleMapping.findAndCountAll({
+        include: [
+          {
+            model: Sale,
+            as: "sales",
+            required: true,
+            include: [
+              {
+                model: Product,
+                as: "product",
+                required: true,
+                where: sequelize.where(
+                  sequelize.fn('LOWER', sequelize.col('product_name')),
+                  'LIKE',
+                  `%${searchQuery.toLowerCase()}%`
+                ),
+                attributes: ['id', 'product_name', 'length', 'width', 'thickness', 'weight'],
+                include: [
+                  { model: Brand, as: "brand", attributes: ["id", "brand_name"] },
+                  { model: Category, as: "category", attributes: ["id", "category_name"] }
+                ]
+              },
+              {
+                model: Shop,
+                as: "shop",
+                required: false,
+                attributes: ["id", "shop_name"]
+              }
+            ]
+          }
+        ],
+        order: [["sale_date", "DESC"]],
+        limit: parseInt(limit),
+        offset,
+        distinct: true,
+        subQuery: false
+      });
+
+      const shopMatches = await CustomerSaleMapping.findAndCountAll({
+        include: [
+          {
+            model: Sale,
+            as: "sales",
+            required: true,
+            include: [
+              {
+                model: Product,
+                as: "product",
+                required: false,
+                attributes: ['id', 'product_name', 'length', 'width', 'thickness', 'weight'],
+                include: [
+                  { model: Brand, as: "brand", attributes: ["id", "brand_name"] },
+                  { model: Category, as: "category", attributes: ["id", "category_name"] }
+                ]
+              },
+              {
+                model: Shop,
+                as: "shop",
+                required: true,
+                where: sequelize.where(
+                  sequelize.fn('LOWER', sequelize.col('shop_name')),
+                  'LIKE',
+                  `%${searchQuery.toLowerCase()}%`
+                ),
+                attributes: ["id", "shop_name"]
+              }
+            ]
+          }
+        ],
+        order: [["sale_date", "DESC"]],
+        limit: parseInt(limit),
+        offset,
+        distinct: true,
+        subQuery: false
+      });
+
+      // Combine and deduplicate results
+      const allResults = new Map();
+      
+      [...customerSales.rows, ...productMatches.rows, ...shopMatches.rows].forEach(sale => {
+        if (!allResults.has(sale.id)) {
+          allResults.set(sale.id, sale);
+        }
+      });
+
+      const uniqueSales = Array.from(allResults.values())
+        .sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
+        .slice(offset, offset + parseInt(limit));
+
+      // Transform results
+      const transformedSales = uniqueSales.map(customerSale => {
+        const totalItems = customerSale.sales ? customerSale.sales.length : 0;
+        const totalQuantity = customerSale.sales ? 
+          customerSale.sales.reduce((sum, item) => sum + item.quantity_sold, 0) : 0;
+        const shopsInvolved = customerSale.sales ? 
+          [...new Set(customerSale.sales.map(item => item.shop?.shop_name).filter(Boolean))] : [];
+        
+        return {
+          id: customerSale.id,
+          customer_name: customerSale.customer_name,
+          customer_phone: customerSale.customer_phone,
+          payment_method: customerSale.payment_method,
+          sale_date: customerSale.sale_date,
+          total_amount: customerSale.total_amount,
+          customer_paid: customerSale.customer_paid,
+          discount_amount: customerSale.discount_amount,
+          rest_amount: customerSale.rest_amount,
+          createdAt: customerSale.createdAt,
+          updatedAt: customerSale.updatedAt,
+          total_items: totalItems,
+          total_quantity: totalQuantity,
+          shops_involved: shopsInvolved,
+          items: customerSale.sales ? customerSale.sales.map(item => ({
+            id: item.id,
+            quantity_sold: item.quantity_sold,
+            unit_price: item.unit_price,
+            total_price: (parseFloat(item.unit_price) * item.quantity_sold).toFixed(2),
+            product: item.product,
+            shop: item.shop,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
+          })) : []
+        };
+      });
+
+      const totalRecords = allResults.size;
+      const currentPage = parseInt(page);
+      const perPage = parseInt(limit);
+      const totalPages = Math.ceil(totalRecords / perPage);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          sales: transformedSales,
+          pagination: {
+            currentPage,
+            limit: perPage,
+            total: totalRecords,
+            totalPages,
+            hasNextPage: currentPage < totalPages,
+            hasPrevPage: currentPage > 1
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Error searching sales:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Error searching sales",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }

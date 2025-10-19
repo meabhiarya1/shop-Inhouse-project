@@ -171,6 +171,10 @@ const updateSaleValidation = [
 
 // Routes
 router.get('/', SalesController.getAllSales);
+
+// Search sales - MUST be before /:id route to avoid conflict
+router.get('/search', SalesController.searchSales);
+
 router.get('/:id', SalesController.getSaleById);
 
 // Create sale - now handles bulk sales with multiple items
