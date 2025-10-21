@@ -395,7 +395,14 @@ function SalesboardInner() {
       await axios.post("/api/sales", payload, { headers });
       toast.success("Sale created");
       setCreateOpen(false);
-  await loadSales(1);
+      
+      // If user is viewing search results, clear search and go to page 1
+      if (searchResults && searchTerm) {
+        setSearchTerm("");
+        setSearchResults(null);
+      }
+      // Always load first page after creating a new sale
+      await loadSales(1);
     } catch (error) {
       const msg =
         error?.response?.data?.message ||
@@ -443,7 +450,14 @@ function SalesboardInner() {
       await axios.put(`/api/sales/${editForm.id}`, payload, { headers });
       toast.success("Sale updated");
       setEditOpen(false);
-  await loadSales(1);
+      
+      // If user is viewing search results, refresh the search
+      if (searchResults && searchTerm) {
+        await searchSalesApi(searchTerm, searchPagination.currentPage || 1);
+      } else {
+        // Otherwise refresh the regular sales list
+        await loadSales(pagination.currentPage || 1);
+      }
     } catch (error) {
       const msg =
         error?.response?.data?.message ||
@@ -464,7 +478,15 @@ function SalesboardInner() {
       await axios.delete(`/api/sales/${activeSale.id}`, { headers });
       toast.success("Sale deleted");
       setDeleteOpen(false);
-      await loadSales(pagination.currentPage || 1);
+      setActiveSale(null);
+      
+      // If user is viewing search results, refresh the search
+      if (searchResults && searchTerm) {
+        await searchSalesApi(searchTerm, searchPagination.currentPage || 1);
+      } else {
+        // Otherwise refresh the regular sales list
+        await loadSales(pagination.currentPage || 1);
+      }
     } catch (error) {
       const msg =
         error?.response?.data?.message ||
@@ -842,7 +864,7 @@ function SalesboardInner() {
 
                                 <div className="flex items-center justify-between text-sm">
                                   <span className="text-white/60">
-                                    Rest Amount:
+                                    Due Amount:
                                   </span>
                                   <span
                                     className={
@@ -877,14 +899,25 @@ function SalesboardInner() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    openDetails(s);
+                                    openDelete(s);
                                   }}
-                                  className="flex-1 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all text-xs flex items-center justify-center space-x-1"
-                                  title="View Items"
+                                  className="px-3 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-400 hover:text-red-300 transition-all text-xs flex items-center justify-center"
+                                  title="Delete Sale"
                                   style={{ minWidth: 0 }}
                                 >
+                                  <Trash2 size={16} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDetails(s);
+                                  }}
+                                  className=" px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all text-xs flex items-center justify-center space-x-1"
+                                  title="View Items"
+                                  // style={{ minWidth: 0 }}
+                                >
                                   <Info size={15} />
-                                  <span className="hidden sm:inline">View Items</span>
+                                  {/* <span className="hidden sm:inline">View Items</span> */}
                                 </button>
                               </div>
                             </div>
@@ -1038,6 +1071,13 @@ function SalesboardInner() {
                                         title="Edit Sale"
                                       >
                                         <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        className="px-2 py-1 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-400 hover:text-red-300 transition-all border border-red-600/20"
+                                        onClick={() => openDelete(s)}
+                                        title="Delete Sale"
+                                      >
+                                        <Trash2 size={14} />
                                       </button>
                                       <button
                                         className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-all border border-white/10"
@@ -1726,7 +1766,7 @@ function SalesboardInner() {
                       )}
 
                     <div className="flex items-center justify-between">
-                      <span className="text-white/60 text-xs">Rest Amount</span>
+                      <span className="text-white/60 text-xs">Due Amount</span>
                       <span
                         className={
                           detailsSale?.rest_amount &&

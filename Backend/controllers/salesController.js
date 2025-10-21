@@ -694,6 +694,7 @@ class SalesController {
     try {
       const { id } = req.params;
 
+      // Find the sale record
       const sale = await Sale.findByPk(id, { transaction });
       if (!sale) {
         await transaction.rollback();
@@ -703,13 +704,26 @@ class SalesController {
         });
       }
 
-      // Restore product quantity
+      // Get the product and capture current quantity BEFORE updating
       const product = await Product.findByPk(sale.product_id, { transaction });
+      if (!product) {
+        await transaction.rollback();
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found'
+        });
+      }
+
+      const oldProductQuantity = product.quantity;
+      const restoredQuantity = sale.quantity_sold;
+      const newProductQuantity = oldProductQuantity + restoredQuantity;
+
+      // Restore product quantity (add back the sold quantity)
       await product.update({
-        quantity: product.quantity + sale.quantity_sold
+        quantity: newProductQuantity
       }, { transaction });
 
-      // Delete the sale
+      // Delete the sale record
       await sale.destroy({ transaction });
 
       await transaction.commit();
@@ -718,8 +732,11 @@ class SalesController {
         success: true,
         message: 'Sale deleted and product quantity restored',
         data: {
-          restored_quantity: sale.quantity_sold,
-          new_product_quantity: product.quantity + sale.quantity_sold
+          sale_id: id,
+          product_id: sale.product_id,
+          restored_quantity: restoredQuantity,
+          old_product_quantity: oldProductQuantity,
+          new_product_quantity: newProductQuantity
         }
       });
 
@@ -728,7 +745,8 @@ class SalesController {
       console.error('Error deleting sale:', error);
       res.status(500).json({
         success: false,
-        message: 'Error deleting sale'
+        message: 'Error deleting sale',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
