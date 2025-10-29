@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Menu,
   Plus,
+  Minus,
   Pencil,
   Trash2,
   Info,
@@ -93,13 +94,14 @@ function SalesboardInner() {
 
   const [editForm, setEditForm] = useState({
     id: "",
-    quantity_sold: "",
-    unit_price: "",
-    total_amount: "",
+    items: [], // Array of sale items with their details
     customer_name: "",
     customer_phone: "",
     payment_method: "cash",
     sale_date: "",
+    customer_paid: 0,
+    discount_amount: 0,
+    rest_amount: 0,
   });
 
   const headers = useMemo(
@@ -346,11 +348,56 @@ function SalesboardInner() {
     return isFinite(q * u) ? q * u : 0;
   }, [createForm.quantity_sold, createForm.unit_price]);
 
-  const editTotal = useMemo(() => {
-    const q = Number(editForm.quantity_sold || 0);
-    const u = Number(editForm.unit_price || 0);
-    return isFinite(q * u) ? q * u : 0;
-  }, [editForm.quantity_sold, editForm.unit_price]);
+  // Calculate edit totals based on items
+  const editTotals = useMemo(() => {
+    let grandTotal = 0;
+    const itemTotals = {};
+    
+    editForm.items.forEach(item => {
+      const unitPrice = parseFloat(item.unit_price) || 0;
+      const quantity = parseInt(item.quantity_sold) || 0;
+      const itemTotal = unitPrice * quantity;
+      itemTotals[item.id] = itemTotal;
+      grandTotal += itemTotal;
+    });
+
+    return {
+      itemTotals,
+      grandTotal
+    };
+  }, [editForm.items]);
+
+  // Handle item quantity change in edit modal
+  const handleEditItemQuantityChange = (itemId, newQuantity) => {
+    setEditForm(prev => ({
+      ...prev,
+      items: prev.items.map(item => 
+        item.id === itemId 
+          ? { ...item, quantity_sold: newQuantity }
+          : item
+      )
+    }));
+  };
+
+  // Handle item unit price change in edit modal
+  const handleEditItemPriceChange = (itemId, newPrice) => {
+    setEditForm(prev => ({
+      ...prev,
+      items: prev.items.map(item => 
+        item.id === itemId 
+          ? { ...item, unit_price: newPrice }
+          : item
+      )
+    }));
+  };
+
+  // Handle item removal in edit modal
+  const handleEditItemRemove = (itemId) => {
+    setEditForm(prev => ({
+      ...prev,
+      items: prev.items.filter(item => item.id !== itemId)
+    }));
+  };
 
   // Filter sales based on selected filters
   const filteredSales = useMemo(() => {
@@ -417,38 +464,110 @@ function SalesboardInner() {
       const { data } = await axios.get(`/api/sales/${sale.id}`, { headers });
       const s = data?.data || sale;
       setActiveSale(s);
+      
+      // Format items for editing - each item can have its quantity and unit price edited
+      const formattedItems = (s.items || []).map(item => ({
+        id: item.id,
+        product_id: item.product?.id,
+        product_name: item.product?.product_name,
+        brand: item.product?.brand?.brand_name,
+        category: item.product?.category?.category_name,
+        shop_id: item.shop?.id,
+        shop_name: item.shop?.shop_name,
+        quantity_sold: item.quantity_sold,
+        unit_price: parseFloat(item.unit_price),
+        total_price: parseFloat(item.total_price),
+        dimensions: item.product?.length && item.product?.width && item.product?.thickness 
+          ? `${item.product.length} × ${item.product.width} × ${item.product.thickness}` 
+          : 'N/A',
+        weight: item.product?.weight || 'N/A'
+      }));
+      
       setEditForm({
         id: s.id,
-        quantity_sold: s.quantity_sold,
-        unit_price: s.unit_price ?? "",
-        total_amount: s.total_amount ?? "",
+        items: formattedItems,
         customer_name: s.customer_name ?? "",
         customer_phone: s.customer_phone ?? "",
         payment_method: s.payment_method || "cash",
         sale_date: s.sale_date
           ? new Date(s.sale_date).toISOString().slice(0, 16)
-          : "", // datetime-local format
+          : "",
+        customer_paid: parseFloat(s.customer_paid) || 0,
+        discount_amount: parseFloat(s.discount_amount) || 0,
+        rest_amount: parseFloat(s.rest_amount) || 0,
       });
       setEditOpen(true);
-    } catch {
+    } catch (error) {
+      console.error("Failed to load sale:", error);
       toast.error("Failed to load sale");
     }
   };
 
   const handleEdit = async (e) => {
     e.preventDefault();
+    
+    // Validate that we have items
+    if (!editForm.items || editForm.items.length === 0) {
+      toast.error('Cannot save sale with no items');
+      return;
+    }
+
+    // Validate customer_paid
+    if (editForm.customer_paid <= 0) {
+      toast.error('Customer paid amount must be greater than 0');
+      return;
+    }
+
+    if (editForm.customer_paid > editTotals.grandTotal) {
+      toast.error('Customer paid amount cannot be greater than Grand Total');
+      return;
+    }
+
     try {
+      // Calculate rest amount and validate discount
+      const grandTotal = editTotals.grandTotal;
+      const paidAmount = editForm.customer_paid;
+      const discountAmount = parseFloat(editForm.discount_amount) || 0;
+      
+      // Validate discount amount
+      if (discountAmount > (grandTotal - paidAmount)) {
+        toast.error('Discount amount cannot be greater than the remaining balance');
+        return;
+      }
+
+      let restAmount;
+      if (paidAmount === grandTotal) {
+        restAmount = 0;
+      } else {
+        restAmount = Math.max(0, grandTotal - paidAmount - discountAmount);
+      }
+
       const payload = {
-        quantity_sold: Number(editForm.quantity_sold),
-        unit_price: editForm.unit_price ? Number(editForm.unit_price) : null,
-        total_amount: Number(editTotal),
-        customer_name: editForm.customer_name || undefined,
-        customer_phone: editForm.customer_phone || undefined,
-        payment_method: editForm.payment_method || "cash",
-        sale_date: editForm.sale_date || undefined,
+        items: editForm.items.map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          quantity_sold: parseInt(item.quantity_sold) || 0,
+          unit_price: parseFloat(item.unit_price) || 0,
+          total_price: editTotals.itemTotals[item.id] || 0,
+          shop_id: item.shop_id
+        })),
+        customer: {
+          customer_name: editForm.customer_name.trim() || null,
+          customer_phone: editForm.customer_phone.trim() || null,
+          payment_method: editForm.payment_method,
+          sale_date: editForm.sale_date,
+          customer_paid: paidAmount
+        },
+        totals: {
+          total_amount: grandTotal,
+          customer_paid: paidAmount,
+          discount_amount: discountAmount > 0 ? discountAmount : null,
+          rest_amount: restAmount > 0 ? restAmount : null
+        }
       };
+      
       await axios.put(`/api/sales/${editForm.id}`, payload, { headers });
-      toast.success("Sale updated");
+      toast.success("Sale updated successfully");
       setEditOpen(false);
       
       // If user is viewing search results, refresh the search
@@ -475,7 +594,8 @@ function SalesboardInner() {
   const handleDelete = async () => {
     if (!activeSale) return;
     try {
-      await axios.delete(`/api/sales/${activeSale.id}`, { headers });
+      // Use the customer sale transaction delete endpoint
+      await axios.delete(`/api/sales/customer/${activeSale.id}`, { headers });
       toast.success("Sale deleted");
       setDeleteOpen(false);
       setActiveSale(null);
@@ -1383,102 +1503,240 @@ function SalesboardInner() {
 
       {/* Edit Modal */}
       {editOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3">
-          <div className="w-full max-w-3xl bg-gradient-to-br from-[#0f1535] to-[#1a2048] text-white rounded-2xl border border-white/20 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="w-full max-w-5xl bg-gradient-to-br from-[#0f1535] to-[#1a2048] text-white rounded-2xl border border-white/20 shadow-2xl my-8">
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600/20 to-purple-600/20 p-6 border-b border-white/10">
+            <div className="bg-gradient-to-r from-indigo-600/20 to-purple-600/20 p-4 border-b border-white/10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-indigo-600/20 rounded-xl flex items-center justify-center">
-                    <Pencil size={24} className="text-indigo-400" />
+                  <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center">
+                    <Pencil size={20} className="text-indigo-400" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white">Edit Sale</h3>
-                    <p className="text-white/60 text-sm">
-                      Update sale information
+                    <h3 className="text-lg font-bold text-white">Edit Sale</h3>
+                    <p className="text-white/60 text-xs">
+                      Update sale items and payment information
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
-                  onClick={() => setEditOpen(false)}
-                >
-                  <span className="text-white/80 text-lg">✕</span>
-                </button>
+                
+                <div className="flex items-center space-x-4">
+                  {/* Grand Total Display */}
+                  <div className="text-right">
+                    <div className="text-xs text-white/60">Grand Total</div>
+                    <div className="text-xl font-bold text-green-400">
+                      ₹{editTotals.grandTotal.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
+                    onClick={() => setEditOpen(false)}
+                  >
+                    <span className="text-white/80 text-lg">✕</span>
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Form Content */}
-            <form onSubmit={handleEdit} className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Quantity & Unit Price */}
-                <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Package size={18} className="text-indigo-400" />
-                    <h4 className="font-semibold text-white">
-                      Quantity & Price
-                    </h4>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
-                        <Package size={14} />
-                        <span>Quantity</span>
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 transition-all"
-                        value={editForm.quantity_sold}
-                        onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
-                            quantity_sold: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
-                        <DollarSign size={14} />
-                        <span>Unit Price (₹)</span>
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 transition-all"
-                        value={editForm.unit_price}
-                        onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
-                            unit_price: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
+            <form 
+              onSubmit={handleEdit} 
+              className="p-4 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto"
+              style={{
+                scrollbarWidth: 'none', /* Firefox */
+                msOverflowStyle: 'none', /* IE and Edge */
+              }}
+            >
+              <style>{`
+                form::-webkit-scrollbar {
+                  display: none; /* Chrome, Safari, Opera */
+                }
+              `}</style>
+              {/* Items Section */}
+              <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Package size={16} className="text-indigo-400" />
+                    <h4 className="font-semibold text-white text-sm">Sale Items</h4>
+                    <span className="text-xs text-white/60">({editForm.items.length} {editForm.items.length === 1 ? 'item' : 'items'})</span>
                   </div>
                 </div>
 
-                {/* Payment & Total */}
-                <div className="bg-gradient-to-br from-green-600/10 to-emerald-600/10 rounded-xl p-4 border border-green-600/20 h-full">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <DollarSign size={18} className="text-green-400" />
-                    <h4 className="font-semibold text-white">
-                      Payment Details
-                    </h4>
+                <div className="space-y-2">
+                  {editForm.items.map((item, index) => (
+                    <div key={item.id} className="bg-white/5 rounded-lg p-3 border border-white/10">
+                      {/* Item Info */}
+                      <div className="flex items-start space-x-2 mb-2">
+                        <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Package size={14} className="text-indigo-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-medium capitalize text-white truncate text-sm mb-1">
+                            {item.product_name}
+                          </h5>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className="bg-blue-600/20 text-blue-300 px-2 py-0.5 rounded text-xs">
+                              {item.brand}
+                            </span>
+                            <span className="bg-purple-600/20 text-purple-300 px-2 py-0.5 rounded text-xs">
+                              {item.shop_name}
+                            </span>
+                            {item.dimensions && item.dimensions !== 'N/A' && (
+                              <span className="bg-orange-600/20 text-orange-300 px-2 py-0.5 rounded text-xs">
+                                📏 {item.dimensions}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Editable Fields */}
+                      <div className="flex items-center justify-between space-x-2 bg-white/5 rounded-lg p-2 border border-white/5">
+                        {/* Unit Price */}
+                        <div className="flex-1 min-w-0 max-w-[140px]">
+                          <div className="text-xs text-white/60 mb-1">Unit Price (₹)</div>
+                          <div className="relative">
+                            <DollarSign size={10} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-white/40" />
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              className="w-full bg-white/10 border border-white/20 rounded pl-5 pr-2 py-1.5 text-xs text-white placeholder-white/40 focus:border-green-400 focus:ring-1 focus:ring-green-400/20 transition-all"
+                              placeholder="0.00"
+                              value={item.unit_price || ''}
+                              onChange={(e) => handleEditItemPriceChange(item.id, parseFloat(e.target.value) || 0)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Quantity */}
+                        <div className="flex-shrink-0">
+                          <div className="text-xs text-white/60 mb-1">Quantity</div>
+                          <div className="flex items-center space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => handleEditItemQuantityChange(item.id, Math.max(1, item.quantity_sold - 1))}
+                              className="w-6 h-6 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
+                            >
+                              <Minus size={12} />
+                            </button>
+                            
+                            <div className="w-10 h-6 bg-white/10 rounded flex items-center justify-center">
+                              <span className="text-xs font-medium">{item.quantity_sold}</span>
+                            </div>
+                            
+                            <button
+                              type="button"
+                              onClick={() => handleEditItemQuantityChange(item.id, item.quantity_sold + 1)}
+                              className="w-6 h-6 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Item Total */}
+                        <div className="flex-shrink-0 text-right">
+                          <div className="text-xs text-white/60 mb-1">Item Total</div>
+                          <div className="text-sm font-bold text-green-400">
+                            ₹{(editTotals.itemTotals[item.id] || 0).toLocaleString('en-IN')}
+                          </div>
+                        </div>
+
+                        {/* Delete Icon */}
+                        <div className="flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleEditItemRemove(item.id)}
+                            className="w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 flex items-center justify-center transition-all"
+                            title="Remove item"
+                            disabled={editForm.items.length === 1}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {/* Customer Information Section */}
+                <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <User size={16} className="text-purple-400" />
+                    <h4 className="font-semibold text-white text-sm">Customer Information</h4>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     <div>
-                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
-                        <CreditCard size={14} />
+                      <label className="flex items-center space-x-1 text-xs text-white/70 mb-1">
+                        <User size={12} />
+                        <span>Customer Name</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-2 text-sm text-white placeholder-white/40 focus:border-purple-400 focus:ring-1 focus:ring-purple-400/20 transition-all"
+                        placeholder="Enter customer name"
+                        value={editForm.customer_name}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            customer_name: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <label className="flex items-center space-x-1 text-xs text-white/70 mb-1">
+                        <Phone size={12} />
+                        <span>Customer Phone</span>
+                      </label>
+                      <input
+                        type="tel"
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-2 text-sm text-white placeholder-white/40 focus:border-purple-400 focus:ring-1 focus:ring-purple-400/20 transition-all"
+                        placeholder="Enter phone number"
+                        value={editForm.customer_phone}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            customer_phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 15),
+                          })
+                        }
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="flex items-center space-x-1 text-xs text-white/70 mb-1">
+                        <Calendar size={12} />
+                        <span>Sale Date & Time</span>
+                      </label>
+                      <input
+                        type="datetime-local"
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-2 text-sm text-white focus:border-purple-400 focus:ring-1 focus:ring-purple-400/20 transition-all"
+                        value={editForm.sale_date}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            sale_date: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <label className="flex items-center space-x-1 text-xs text-white/70 mb-1">
+                        <CreditCard size={12} />
                         <span>Payment Method</span>
                       </label>
                       <select
-                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                        className="w-full bg-white/10 border border-white/20 rounded-lg p-2 text-sm text-white focus:border-purple-400 focus:ring-1 focus:ring-purple-400/20 transition-all"
                         value={editForm.payment_method}
                         onChange={(e) =>
                           setEditForm({
@@ -1501,114 +1759,140 @@ function SalesboardInner() {
                         )}
                       </select>
                     </div>
+                  </div>
+                </div>
 
-                    <div>
-                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
-                        <DollarSign size={14} />
-                        <span>Total Amount</span>
-                      </label>
-                      <div className="bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-600/30 rounded-lg p-4 text-center">
-                        <span className="text-green-400 font-bold text-2xl">
-                          ₹{Number(editTotal).toLocaleString("en-IN")}
-                        </span>
+                {/* Payment Details Section */}
+                <div className="bg-gradient-to-br from-green-600/10 to-emerald-600/10 rounded-xl p-3 border border-green-600/20">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <CreditCard size={16} className="text-green-400" />
+                    <h4 className="font-semibold text-white text-sm">Payment Details</h4>
+                  </div>
+
+                  <div className="space-y-2">
+                    {/* Grand Total Display */}
+                    <div className="bg-white/10 rounded-lg p-2 border border-white/20">
+                      <div className="text-xs text-white/60 mb-1">Grand Total</div>
+                      <div className="text-lg font-bold text-white">
+                        ₹{editTotals.grandTotal.toLocaleString('en-IN')}
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Customer Information */}
-                <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <User size={18} className="text-purple-400" />
-                    <h4 className="font-semibold text-white">
-                      Customer Information
-                    </h4>
-                  </div>
-
-                  <div className="space-y-4">
+                    {/* Customer Paid Input */}
                     <div>
-                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
-                        <User size={14} />
-                        <span>Customer Name</span>
+                      <label className="flex items-center space-x-1 text-xs text-white/70 mb-1">
+                        <DollarSign size={12} />
+                        <span>Amount Customer Paid</span>
                       </label>
-                      <input
-                        type="text"
-                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all"
-                        placeholder="Enter customer name"
-                        value={editForm.customer_name}
-                        onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
-                            customer_name: e.target.value,
-                          })
-                        }
-                      />
+                      <div className="relative">
+                        <DollarSign size={10} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-white/40" />
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max={editTotals.grandTotal}
+                          className="w-full bg-white/10 border border-white/20 rounded-lg pl-5 pr-2 py-2 text-sm text-white placeholder-white/40 focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400/20 transition-all font-medium"
+                          placeholder="0.00"
+                          value={editForm.customer_paid || ''}
+                          onChange={(e) => {
+                            const newPaid = parseFloat(e.target.value) || 0;
+                            const newRest = Math.max(0, editTotals.grandTotal - newPaid - (parseFloat(editForm.discount_amount) || 0));
+                            setEditForm({
+                              ...editForm,
+                              customer_paid: newPaid,
+                              rest_amount: newRest
+                            });
+                          }}
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
-                        <Phone size={14} />
-                        <span>Customer Phone</span>
-                      </label>
-                      <input
-                        type="tel"
-                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all"
-                        placeholder="Enter phone number"
-                        value={editForm.customer_phone}
-                        onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
-                            customer_phone: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
+                    {/* Discount Amount Field */}
+                    {editForm.customer_paid < editTotals.grandTotal && (
+                      <div>
+                        <label className="flex items-center space-x-1 text-xs text-white/70 mb-1">
+                          <DollarSign size={12} />
+                          <span>Discount Amount</span>
+                        </label>
+                        <div className="relative">
+                          <DollarSign size={10} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-white/40" />
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={editTotals.grandTotal - editForm.customer_paid}
+                            className="w-full bg-white/10 border border-white/20 rounded-lg pl-5 pr-2 py-2 text-sm text-white placeholder-white/40 focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400/20 transition-all"
+                            placeholder="0.00"
+                            value={editForm.discount_amount || ''}
+                            onChange={(e) => {
+                              const newDiscount = parseFloat(e.target.value) || 0;
+                              const maxDiscount = editTotals.grandTotal - editForm.customer_paid;
+                              const finalDiscount = Math.min(newDiscount, maxDiscount);
+                              const newRest = Math.max(0, editTotals.grandTotal - editForm.customer_paid - finalDiscount);
+                              setEditForm({
+                                ...editForm,
+                                discount_amount: finalDiscount,
+                                rest_amount: newRest
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
 
-                {/* Sale Date & Time */}
-                <div className="bg-white/5 rounded-xl p-4 border border-white/10 h-full">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Calendar size={18} className="text-blue-400" />
-                    <h4 className="font-semibold text-white">
-                      Sale Date & Time
-                    </h4>
-                  </div>
-
-                  <div className="flex flex-col justify-center h-full">
-                    <div>
-                      <label className="flex items-center space-x-2 text-sm text-white/70 mb-2">
-                        <Calendar size={14} />
-                        <span>Date & Time</span>
-                      </label>
-                      <input
-                        type="datetime-local"
-                        className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all"
-                        value={editForm.sale_date}
-                        onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
-                            sale_date: e.target.value,
-                          })
-                        }
-                      />
+                    {/* Rest Amount Display */}
+                    <div className="bg-white/5 rounded-lg p-2 border border-white/10">
+                      <div className="text-xs text-white/60 mb-1">Rest Amount</div>
+                      <div className="text-sm font-bold text-orange-300">
+                        ₹{Math.max(0, editTotals.grandTotal - editForm.customer_paid - (parseFloat(editForm.discount_amount) || 0)).toLocaleString('en-IN')}
+                      </div>
                     </div>
+
+                    {/* Payment Summary */}
+                    {editForm.customer_paid !== editTotals.grandTotal && (
+                      <div className="bg-white/5 rounded-lg p-2 border border-white/10">
+                        <div className="text-xs text-white/60 mb-1">Payment Breakdown:</div>
+                        <div className="space-y-0.5 text-xs">
+                          <div className="flex justify-between">
+                            <span>Grand Total:</span>
+                            <span className="font-medium">₹{editTotals.grandTotal.toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Customer Paid:</span>
+                            <span className="font-medium text-green-300">₹{editForm.customer_paid.toLocaleString('en-IN')}</span>
+                          </div>
+                          {editForm.discount_amount > 0 && (
+                            <div className="flex justify-between">
+                              <span>Discount:</span>
+                              <span className="font-medium text-yellow-300">₹{parseFloat(editForm.discount_amount).toLocaleString('en-IN')}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between border-t border-white/10 pt-0.5">
+                            <span>Rest:</span>
+                            <span className="font-medium text-orange-300">
+                              ₹{Math.max(0, editTotals.grandTotal - editForm.customer_paid - (parseFloat(editForm.discount_amount) || 0)).toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Footer Actions */}
-              <div className="mt-6 pt-4 border-t border-white/10 flex justify-end space-x-3">
+              <div className="pt-3 border-t border-white/10 flex justify-end space-x-2">
                 <button
                   type="button"
-                  className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all border border-white/10"
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all border border-white/10 text-sm"
                   onClick={() => setEditOpen(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all flex items-center space-x-2 shadow-lg"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white transition-all flex items-center space-x-2 shadow-lg text-sm"
+                  disabled={editForm.items.length === 0 || editForm.customer_paid <= 0}
                 >
                   <span>Save Changes</span>
                 </button>

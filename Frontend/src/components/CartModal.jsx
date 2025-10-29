@@ -4,6 +4,17 @@ import { useCart } from '../context/CartContext.jsx';
 import { toast } from 'react-toastify';
 import axios from '../utils/axiosConfig';
 
+// Helper function to get current local datetime in the format required by datetime-local input
+const getCurrentLocalDateTime = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
 export default function CartModal() {
   const { 
     items, 
@@ -23,7 +34,7 @@ export default function CartModal() {
     customer_name: '',
     customer_phone: '',
     payment_method: 'cash',
-    sale_date: new Date().toISOString().slice(0, 16), // Current date-time in local format
+    sale_date: getCurrentLocalDateTime(), // Current date-time in local format
     customer_paid: 0, // Amount actually paid by customer
     rest_amount: '', // Remaining amount to be paid later
     discount_amount: 0 // Discount given by seller
@@ -104,6 +115,7 @@ export default function CartModal() {
     // This ensures that if user went back to cart and changed values, the payment amounts are updated
     setCheckoutForm(prev => ({
       ...prev,
+      sale_date: getCurrentLocalDateTime(), // Set to current date and time in local timezone
       customer_paid: totals.total, // Reset to full amount
       rest_amount: 0, // Reset rest amount 
       discount_amount: 0 // Reset discount amount
@@ -311,7 +323,7 @@ export default function CartModal() {
           customer_name: '',
           customer_phone: '',
           payment_method: 'cash',
-          sale_date: new Date().toISOString().slice(0, 16),
+          sale_date: getCurrentLocalDateTime(),
           customer_paid: 0,
           rest_amount: '',
           discount_amount: 0

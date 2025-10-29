@@ -417,58 +417,101 @@ class SalesController {
     }
   }
 
-  // Get sale by ID
+  // Get sale by ID (Customer Sale Transaction)
   static async getSaleById(req, res) {
     try {
       const { id } = req.params;
 
-      const sale = await Sale.findByPk(id, {
+      // The id is customer_sale_id from customer_sale_mappings table
+      const customerSale = await CustomerSaleMapping.findByPk(id, {
         include: [
           {
-            model: Product,
-            as: 'product',
+            model: Sale,
+            as: 'sales',
             include: [
               {
-                model: Brand,
-                as: 'brand',
-                attributes: ['id', 'brand_name']
+                model: Product,
+                as: 'product',
+                attributes: ['id', 'product_name', 'length', 'width', 'thickness', 'weight'],
+                include: [
+                  {
+                    model: Brand,
+                    as: 'brand',
+                    attributes: ['id', 'brand_name']
+                  },
+                  {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'category_name']
+                  }
+                ]
               },
               {
-                model: Category,
-                as: 'category',
-                attributes: ['id', 'category_name']
+                model: Shop,
+                as: 'shop',
+                attributes: ['id', 'shop_name']
               }
             ]
-          },
-          {
-            model: Shop,
-            as: 'shop',
-            attributes: ['id', 'shop_name']
-          },
-          {
-            model: CustomerSaleMapping,
-            as: 'customerSale'
           }
         ]
       });
 
-      if (!sale) {
+      if (!customerSale) {
         return res.status(404).json({
           success: false,
           message: 'Sale not found'
         });
       }
 
+      // Transform to match the structure used in getAllSales
+      const totalItems = customerSale.sales ? customerSale.sales.length : 0;
+      const totalQuantity = customerSale.sales ? 
+        customerSale.sales.reduce((sum, item) => sum + item.quantity_sold, 0) : 0;
+      const shopsInvolved = customerSale.sales ? 
+        [...new Set(customerSale.sales.map(item => item.shop.shop_name))] : [];
+
+      const transformedSale = {
+        id: customerSale.id,
+        customer_name: customerSale.customer_name,
+        customer_phone: customerSale.customer_phone,
+        payment_method: customerSale.payment_method,
+        sale_date: customerSale.sale_date,
+        total_amount: customerSale.total_amount,
+        customer_paid: customerSale.customer_paid,
+        discount_amount: customerSale.discount_amount,
+        rest_amount: customerSale.rest_amount,
+        createdAt: customerSale.createdAt,
+        updatedAt: customerSale.updatedAt,
+        
+        // Summary information
+        total_items: totalItems,
+        total_quantity: totalQuantity,
+        shops_involved: shopsInvolved,
+        
+        // Product details
+        items: customerSale.sales ? customerSale.sales.map(item => ({
+          id: item.id,
+          quantity_sold: item.quantity_sold,
+          unit_price: item.unit_price,
+          total_price: (parseFloat(item.unit_price) * item.quantity_sold).toFixed(2),
+          product: item.product,
+          shop: item.shop,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt
+        })) : []
+      };
+
       res.status(200).json({
         success: true,
-        data: sale
+        data: transformedSale
       });
 
     } catch (error) {
       console.error('Error fetching sale:', error);
       res.status(500).json({
         success: false,
-        message: 'Error fetching sale details'
+        message: 'Error fetching sale details',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
