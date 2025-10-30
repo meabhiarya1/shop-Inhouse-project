@@ -620,8 +620,8 @@ function SalesboardInner() {
   const openDetails = async (sale) => {
     // Since we now have customer-based sales data with items included,
     // we don't need to fetch individual sale details anymore
-    console.log("Opening details for sale:", sale);
-    console.log("Items in sale:", sale?.items);
+    // console.log("Opening details for sale:", sale);
+    // console.log("Items in sale:", sale?.items);
     setDetailsSale(sale);
     setDetailsOpen(true);
   };
@@ -634,7 +634,7 @@ function SalesboardInner() {
   // Listen for sale completion events to refresh data
   useEffect(() => {
     const handleSaleCompleted = (event) => {
-      console.log("Sale completed event received:", event.detail);
+      // console.log("Sale completed event received:", event.detail);
       // Refresh sales data to show the new sale
       loadSales(pagination.currentPage || 1);
       // toast.success('Sales data refreshed!', {
