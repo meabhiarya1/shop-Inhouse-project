@@ -516,7 +516,7 @@ class SalesController {
     }
   }
 
-  // Update sale (for corrections) - Single item update
+  // Update sale (Customer Sale Transaction with items)
   static async updateSale(req, res) {
     const transaction = await sequelize.transaction();
     
@@ -531,178 +531,217 @@ class SalesController {
         });
       }
 
-      const { id } = req.params;
+      const { id } = req.params; // This is customer_sale_id
       const {
-        quantity_sold,
-        unit_price,
-        // Customer sale mapping fields
-        customer_name,
-        customer_phone,
-        payment_method,
-        sale_date,
-        total_amount,
-        customer_paid,
-        discount_amount,
-        rest_amount
+        items,      // Array of sale items to update with their IDs
+        customer,   // Customer info (customer_name, customer_phone, payment_method, sale_date)
+        totals      // Totals (total, customer_paid, discount_amount, rest_amount)
       } = req.body;
 
-      const sale = await Sale.findByPk(id, { 
-        include: [{
-          model: CustomerSaleMapping,
-          as: 'customerSale'
-        }],
-        transaction 
-      });
-      
-      if (!sale) {
+      // Validate required data structure
+      if (!customer || !totals) {
         await transaction.rollback();
-        return res.status(404).json({
+        return res.status(400).json({
           success: false,
-          message: 'Sale not found'
+          message: 'Customer and totals information are required'
         });
       }
 
-      // Get the product to update quantity if quantity_sold changed
-      const product = await Product.findByPk(sale.product_id, { transaction });
-      
-      // Update sale record (only fields that belong to Sale table)
-      const saleUpdateData = {};
-      
-      if (quantity_sold !== undefined) {
-        const oldQuantitySold = sale.quantity_sold;
-        const newQuantitySold = parseInt(quantity_sold);
-        const quantityDifference = newQuantitySold - oldQuantitySold;
+      // Find the customer sale mapping
+      const customerSaleMapping = await CustomerSaleMapping.findByPk(id, {
+        include: [{
+          model: Sale,
+          as: 'sales'
+        }],
+        transaction
+      });
 
-        // Check if product has enough stock for the change
-        if (quantityDifference > 0 && product.quantity < quantityDifference) {
-          await transaction.rollback();
-          return res.status(400).json({
-            success: false,
-            message: `Insufficient stock for quantity increase. Available: ${product.quantity}, Required additional: ${quantityDifference}`
-          });
-        }
-
-        saleUpdateData.quantity_sold = newQuantitySold;
-
-        // Update product quantity
-        await product.update({
-          quantity: product.quantity - quantityDifference
-        }, { transaction });
+      if (!customerSaleMapping) {
+        await transaction.rollback();
+        return res.status(404).json({
+          success: false,
+          message: 'Sale transaction not found'
+        });
       }
 
-      if (unit_price !== undefined) {
-        saleUpdateData.unit_price = parseFloat(unit_price);
+      // Extract customer and totals data
+      const {
+        customer_name,
+        customer_phone,
+        payment_method,
+        sale_date
+      } = customer;
+
+      const grandTotal = parseFloat(totals.total_amount);
+      const customerPaidAmount = parseFloat(totals.customer_paid);
+      const discountAmount = parseFloat(totals.discount_amount || 0);
+      const restAmount = parseFloat(totals.rest_amount || 0);
+
+      // Validate customer payment
+      if (!customerPaidAmount || customerPaidAmount <= 0) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Customer paid amount is required and must be greater than 0'
+        });
       }
 
-      // Update sale record if there are changes
-      if (Object.keys(saleUpdateData).length > 0) {
-        await sale.update(saleUpdateData, { transaction });
+      if (customerPaidAmount > grandTotal) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Customer paid amount cannot be greater than total amount'
+        });
       }
 
-      // Update customer sale mapping if customer-related fields are provided
-      if (sale.customerSale && (customer_name !== undefined || customer_phone !== undefined || 
-          payment_method !== undefined || sale_date !== undefined || total_amount !== undefined ||
-          customer_paid !== undefined || discount_amount !== undefined || rest_amount !== undefined)) {
-        
-        const customerSaleUpdateData = {};
-        
-        if (customer_name !== undefined) {
-          customerSaleUpdateData.customer_name = customer_name ? customer_name.trim() : null;
-        }
-        
-        if (customer_phone !== undefined) {
-          customerSaleUpdateData.customer_phone = customer_phone ? customer_phone.trim() : null;
-        }
-        
-        if (payment_method !== undefined) {
-          customerSaleUpdateData.payment_method = payment_method;
-        }
-        
-        if (sale_date !== undefined) {
-          customerSaleUpdateData.sale_date = sale_date ? new Date(sale_date) : new Date();
-        }
-        
-        if (total_amount !== undefined) {
-          customerSaleUpdateData.total_amount = parseFloat(total_amount);
-        }
-        
-        if (customer_paid !== undefined) {
-          const customerPaidAmount = parseFloat(customer_paid);
-          if (customerPaidAmount <= 0) {
+      // Update CustomerSaleMapping
+      const customerSaleUpdateData = {
+        total_amount: grandTotal,
+        customer_name: customer_name ? customer_name.trim() : null,
+        customer_phone: customer_phone ? customer_phone.trim() : null,
+        payment_method: payment_method || 'cash',
+        sale_date: sale_date ? new Date(sale_date) : customerSaleMapping.sale_date,
+        customer_paid: customerPaidAmount,
+        discount_amount: discountAmount > 0 ? discountAmount : null,
+        rest_amount: restAmount > 0 ? restAmount : null
+      };
+
+      await customerSaleMapping.update(customerSaleUpdateData, { transaction });
+
+      // Update individual sale items if provided
+      const updatedItems = [];
+      const productQuantityChanges = [];
+
+      if (items && Array.isArray(items) && items.length > 0) {
+        for (const item of items) {
+          const {
+            id: saleItemId,
+            product_id,
+            quantity_sold: quantity,
+            unit_price,
+            shop_id
+          } = item;
+
+          // Find the sale item
+          const saleItem = await Sale.findByPk(saleItemId, { transaction });
+          
+          if (!saleItem) {
+            await transaction.rollback();
+            return res.status(404).json({
+              success: false,
+              message: `Sale item with ID ${saleItemId} not found`
+            });
+          }
+
+          // Verify this sale item belongs to this customer sale
+          if (saleItem.customer_sale_id !== parseInt(id)) {
             await transaction.rollback();
             return res.status(400).json({
               success: false,
-              message: 'Customer paid amount must be greater than 0'
+              message: `Sale item ${saleItemId} does not belong to this transaction`
             });
           }
-          customerSaleUpdateData.customer_paid = customerPaidAmount;
-          
-          // Recalculate discount and rest amounts
-          const totalAmt = customerSaleUpdateData.total_amount || sale.customerSale.total_amount;
-          
-          if (customerPaidAmount < totalAmt) {
-            if (discount_amount !== undefined && discount_amount !== null) {
-              customerSaleUpdateData.discount_amount = parseFloat(discount_amount);
-              if (customerPaidAmount + parseFloat(discount_amount) < totalAmt) {
-                customerSaleUpdateData.rest_amount = totalAmt - customerPaidAmount - parseFloat(discount_amount);
-              } else {
-                customerSaleUpdateData.rest_amount = null;
-              }
-            } else {
-              customerSaleUpdateData.discount_amount = totalAmt - customerPaidAmount;
-              customerSaleUpdateData.rest_amount = null;
+
+          // Get the product
+          const product = await Product.findByPk(saleItem.product_id, { transaction });
+          if (!product) {
+            await transaction.rollback();
+            return res.status(404).json({
+              success: false,
+              message: `Product not found for sale item ${saleItemId}`
+            });
+          }
+
+          const saleUpdateData = {};
+          let quantityDifference = 0;
+
+          // Update quantity if changed
+          if (quantity !== undefined) {
+            const oldQuantitySold = saleItem.quantity_sold;
+            const newQuantitySold = parseInt(quantity);
+            quantityDifference = newQuantitySold - oldQuantitySold;
+
+            // Check if product has enough stock for the change
+            if (quantityDifference > 0 && product.quantity < quantityDifference) {
+              await transaction.rollback();
+              return res.status(400).json({
+                success: false,
+                message: `Insufficient stock for product ${product.product_name}. Available: ${product.quantity}, Required additional: ${quantityDifference}`
+              });
             }
-          } else if (customerPaidAmount > totalAmt) {
-            await transaction.rollback();
-            return res.status(400).json({
-              success: false,
-              message: 'Customer paid amount cannot be greater than total amount'
+
+            saleUpdateData.quantity_sold = newQuantitySold;
+
+            // Update product quantity
+            await product.update({
+              quantity: product.quantity - quantityDifference
+            }, { transaction });
+
+            productQuantityChanges.push({
+              product_id: product.id,
+              product_name: product.product_name,
+              quantity_change: -quantityDifference,
+              new_stock: product.quantity - quantityDifference
             });
-          } else {
-            customerSaleUpdateData.discount_amount = null;
-            customerSaleUpdateData.rest_amount = null;
           }
+
+          // Update unit price if provided
+          if (unit_price !== undefined) {
+            saleUpdateData.unit_price = parseFloat(unit_price);
+          }
+
+          // Update shop if provided
+          // if (shop_id !== undefined && shop_id !== saleItem.shop_id) {
+          //   // Verify shop exists
+          //   const shop = await Shop.findByPk(shop_id, { transaction });
+          //   if (!shop) {
+          //     await transaction.rollback();
+          //     return res.status(404).json({
+          //       success: false,
+          //       message: `Shop with ID ${shop_id} not found`
+          //     });
+          //   }
+          //   saleUpdateData.shop_id = shop_id;
+          // }
+
+          // Update the sale item
+          if (Object.keys(saleUpdateData).length > 0) {
+            await saleItem.update(saleUpdateData, { transaction });
+          }
+
+          updatedItems.push(saleItemId);
         }
-        
-        if (discount_amount !== undefined) {
-          customerSaleUpdateData.discount_amount = discount_amount !== null ? parseFloat(discount_amount) : null;
-        }
-        
-        if (rest_amount !== undefined) {
-          customerSaleUpdateData.rest_amount = rest_amount !== null ? parseFloat(rest_amount) : null;
-        }
-        
-        // Update customer sale mapping
-        await sale.customerSale.update(customerSaleUpdateData, { transaction });
       }
 
-      // Fetch updated sale with associations
-      const updatedSale = await Sale.findByPk(id, {
+      // Fetch the updated customer sale with all associations
+      const updatedCustomerSale = await CustomerSaleMapping.findByPk(id, {
         include: [
           {
-            model: Product,
-            as: 'product',
+            model: Sale,
+            as: 'sales',
             include: [
               {
-                model: Brand,
-                as: 'brand',
-                attributes: ['id', 'brand_name']
+                model: Product,
+                as: 'product',
+                include: [
+                  {
+                    model: Brand,
+                    as: 'brand',
+                    attributes: ['id', 'brand_name']
+                  },
+                  {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'category_name']
+                  }
+                ]
               },
               {
-                model: Category,
-                as: 'category',
-                attributes: ['id', 'category_name']
+                model: Shop,
+                as: 'shop',
+                attributes: ['id', 'shop_name']
               }
             ]
-          },
-          {
-            model: Shop,
-            as: 'shop',
-            attributes: ['id', 'shop_name']
-          },
-          {
-            model: CustomerSaleMapping,
-            as: 'customerSale'
           }
         ],
         transaction
@@ -710,13 +749,47 @@ class SalesController {
 
       await transaction.commit();
 
+      // Transform response similar to getAllSales structure
+      const totalItems = updatedCustomerSale.sales ? updatedCustomerSale.sales.length : 0;
+      const totalQuantity = updatedCustomerSale.sales ? 
+        updatedCustomerSale.sales.reduce((sum, item) => sum + item.quantity_sold, 0) : 0;
+      const shopsInvolved = updatedCustomerSale.sales ? 
+        [...new Set(updatedCustomerSale.sales.map(item => item.shop.shop_name))] : [];
+
+      const transformedSale = {
+        id: updatedCustomerSale.id,
+        customer_name: updatedCustomerSale.customer_name,
+        customer_phone: updatedCustomerSale.customer_phone,
+        payment_method: updatedCustomerSale.payment_method,
+        sale_date: updatedCustomerSale.sale_date,
+        total_amount: updatedCustomerSale.total_amount,
+        customer_paid: updatedCustomerSale.customer_paid,
+        discount_amount: updatedCustomerSale.discount_amount,
+        rest_amount: updatedCustomerSale.rest_amount,
+        createdAt: updatedCustomerSale.createdAt,
+        updatedAt: updatedCustomerSale.updatedAt,
+        total_items: totalItems,
+        total_quantity: totalQuantity,
+        shops_involved: shopsInvolved,
+        items: updatedCustomerSale.sales ? updatedCustomerSale.sales.map(item => ({
+          id: item.id,
+          quantity_sold: item.quantity_sold,
+          unit_price: item.unit_price,
+          total_price: (parseFloat(item.unit_price) * item.quantity_sold).toFixed(2),
+          product: item.product,
+          shop: item.shop,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt
+        })) : []
+      };
+
       res.status(200).json({
         success: true,
-        message: 'Sale updated successfully',
+        message: 'Sale transaction updated successfully',
         data: {
-          sale: updatedSale,
-          product_quantity_change: saleUpdateData.quantity_sold ? 
-            -(saleUpdateData.quantity_sold - (quantity_sold !== undefined ? parseInt(quantity_sold) - saleUpdateData.quantity_sold : 0)) : 0
+          sale: transformedSale,
+          updated_items_count: updatedItems.length,
+          product_quantity_changes: productQuantityChanges
         }
       });
 
@@ -725,70 +798,89 @@ class SalesController {
       console.error('Error updating sale:', error);
       res.status(500).json({
         success: false,
-        message: 'Error updating sale'
+        message: 'Error updating sale transaction',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
 
-  // Delete sale (refund/cancel)
-  static async deleteSale(req, res) {
+  // Delete entire customer sale transaction (all items)
+  static async deleteCustomerSale(req, res) {
     const transaction = await sequelize.transaction();
     
     try {
-      const { id } = req.params;
+      const { id } = req.params; // customer_sale_id
 
-      // Find the sale record
-      const sale = await Sale.findByPk(id, { transaction });
-      if (!sale) {
+      // Find the customer sale mapping with all associated sales
+      const customerSale = await CustomerSaleMapping.findByPk(id, {
+        include: [{
+          model: Sale,
+          as: 'sales'
+        }],
+        transaction
+      });
+
+      if (!customerSale) {
         await transaction.rollback();
         return res.status(404).json({
           success: false,
-          message: 'Sale not found'
+          message: 'Customer sale transaction not found'
         });
       }
 
-      // Get the product and capture current quantity BEFORE updating
-      const product = await Product.findByPk(sale.product_id, { transaction });
-      if (!product) {
-        await transaction.rollback();
-        return res.status(404).json({
-          success: false,
-          message: 'Product not found'
-        });
+      const restoredProducts = [];
+
+      // Restore product quantities for all items in this sale
+      if (customerSale.sales && customerSale.sales.length > 0) {
+        for (const saleItem of customerSale.sales) {
+          // Get the product
+          const product = await Product.findByPk(saleItem.product_id, { transaction });
+          
+          if (product) {
+            const oldQuantity = product.quantity;
+            const restoredQuantity = saleItem.quantity_sold;
+            const newQuantity = oldQuantity + restoredQuantity;
+
+            // Restore product quantity
+            await product.update({
+              quantity: newQuantity
+            }, { transaction });
+
+            restoredProducts.push({
+              product_id: product.id,
+              product_name: product.product_name,
+              restored_quantity: restoredQuantity,
+              old_quantity: oldQuantity,
+              new_quantity: newQuantity
+            });
+          }
+
+          // Delete the sale item
+          await saleItem.destroy({ transaction });
+        }
       }
 
-      const oldProductQuantity = product.quantity;
-      const restoredQuantity = sale.quantity_sold;
-      const newProductQuantity = oldProductQuantity + restoredQuantity;
-
-      // Restore product quantity (add back the sold quantity)
-      await product.update({
-        quantity: newProductQuantity
-      }, { transaction });
-
-      // Delete the sale record
-      await sale.destroy({ transaction });
+      // Delete the customer sale mapping
+      await customerSale.destroy({ transaction });
 
       await transaction.commit();
 
       res.status(200).json({
         success: true,
-        message: 'Sale deleted and product quantity restored',
+        message: 'Customer sale transaction deleted and product quantities restored',
         data: {
-          sale_id: id,
-          product_id: sale.product_id,
-          restored_quantity: restoredQuantity,
-          old_product_quantity: oldProductQuantity,
-          new_product_quantity: newProductQuantity
+          customer_sale_id: id,
+          deleted_items: customerSale.sales ? customerSale.sales.length : 0,
+          restored_products: restoredProducts
         }
       });
 
     } catch (error) {
       await transaction.rollback();
-      console.error('Error deleting sale:', error);
+      console.error('Error deleting customer sale:', error);
       res.status(500).json({
         success: false,
-        message: 'Error deleting sale',
+        message: 'Error deleting customer sale transaction',
         error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }

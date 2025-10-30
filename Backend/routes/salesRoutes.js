@@ -106,6 +106,8 @@ router.post('/', bulkSaleValidation, SalesController.createSale);
 // Update single sale (legacy)
 router.put('/:id', updateSaleValidation, SalesController.updateSale);
 
-router.delete('/:id', SalesController.deleteSale);
+// Delete entire customer sale transaction (all items) - MUST be before /:id route
+router.delete('/customer/:id', SalesController.deleteCustomerSale);
+
 
 module.exports = router;

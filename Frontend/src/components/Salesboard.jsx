@@ -527,18 +527,20 @@ function SalesboardInner() {
       // Calculate rest amount and validate discount
       const grandTotal = editTotals.grandTotal;
       const paidAmount = editForm.customer_paid;
-      const discountAmount = parseFloat(editForm.discount_amount) || 0;
+      let discountAmount = parseFloat(editForm.discount_amount) || 0;
+      let restAmount = 0;
       
-      // Validate discount amount
-      if (discountAmount > (grandTotal - paidAmount)) {
-        toast.error('Discount amount cannot be greater than the remaining balance');
-        return;
-      }
-
-      let restAmount;
+      // If customer paid equals grand total, reset discount and rest to 0
       if (paidAmount === grandTotal) {
+        discountAmount = 0;
         restAmount = 0;
-      } else {
+      } else if (paidAmount < grandTotal) {
+        // Validate discount amount
+        if (discountAmount > (grandTotal - paidAmount)) {
+          toast.error('Discount amount cannot be greater than the remaining balance');
+          return;
+        }
+        // Calculate rest amount
         restAmount = Math.max(0, grandTotal - paidAmount - discountAmount);
       }
 
@@ -548,15 +550,14 @@ function SalesboardInner() {
           product_id: item.product_id,
           quantity_sold: parseInt(item.quantity_sold) || 0,
           unit_price: parseFloat(item.unit_price) || 0,
-          total_price: editTotals.itemTotals[item.id] || 0,
+          total: editTotals.itemTotals[item.id] || 0,
           shop_id: item.shop_id
         })),
         customer: {
           customer_name: editForm.customer_name.trim() || null,
           customer_phone: editForm.customer_phone.trim() || null,
           payment_method: editForm.payment_method,
-          sale_date: editForm.sale_date,
-          customer_paid: paidAmount
+          sale_date: editForm.sale_date
         },
         totals: {
           total_amount: grandTotal,
@@ -1796,12 +1797,35 @@ function SalesboardInner() {
                           value={editForm.customer_paid || ''}
                           onChange={(e) => {
                             const newPaid = parseFloat(e.target.value) || 0;
-                            const newRest = Math.max(0, editTotals.grandTotal - newPaid - (parseFloat(editForm.discount_amount) || 0));
-                            setEditForm({
-                              ...editForm,
-                              customer_paid: newPaid,
-                              rest_amount: newRest
-                            });
+                            
+                            // If customer paid equals grand total, clear discount and rest
+                            if (newPaid === editTotals.grandTotal) {
+                              setEditForm({
+                                ...editForm,
+                                customer_paid: newPaid,
+                                discount_amount: 0,
+                                rest_amount: 0
+                              });
+                            } else if (newPaid < editTotals.grandTotal) {
+                              // If customer paid is less than grand total, recalculate with existing discount
+                              const currentDiscount = parseFloat(editForm.discount_amount) || 0;
+                              const maxDiscount = editTotals.grandTotal - newPaid;
+                              const validDiscount = Math.min(currentDiscount, maxDiscount);
+                              const newRest = Math.max(0, editTotals.grandTotal - newPaid - validDiscount);
+                              
+                              setEditForm({
+                                ...editForm,
+                                customer_paid: newPaid,
+                                discount_amount: validDiscount,
+                                rest_amount: newRest
+                              });
+                            } else {
+                              // If somehow paid is more than total, just update paid amount
+                              setEditForm({
+                                ...editForm,
+                                customer_paid: newPaid
+                              });
+                            }
                           }}
                         />
                       </div>
