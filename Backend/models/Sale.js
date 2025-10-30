@@ -49,11 +49,11 @@ Sale.init({
   
   unit_price: {
     type: DataTypes.DECIMAL(10, 2),
-    allowNull: true,
+    allowNull: false,
     validate: {
       min: { args: [0], msg: 'Unit price must be non-negative' }
     }
-  },
+  }
 
 }, {
   sequelize,
