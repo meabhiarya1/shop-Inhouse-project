@@ -6,6 +6,7 @@ const Sale = require('../models/Sale');
 const Brand = require('../models/Brand');
 const Shop = require('../models/Shop');
 const Category = require('../models/Category');
+const CustomerSaleMapping = require('../models/CustomerSaleMapping');
 
 class DashboardController {
   
@@ -77,15 +78,20 @@ class DashboardController {
       if (brand_id) productWhere.brand_id = brand_id;
 
       // Get products with their current quantity and aggregated sales data
-      // Note: We aggregate sales on the root (Product) to avoid selecting sales.id which breaks ONLY_FULL_GROUP_BY
       const products = await Product.findAll({
         where: productWhere,
-        attributes: {
-          include: [
-            [fn('COALESCE', fn('SUM', col('sales.quantity_sold')), 0), 'total_sold'],
-            [fn('COALESCE', fn('SUM', col('sales.total_amount')), 0), 'total_revenue']
-          ]
-        },
+        attributes: [
+          'id',
+          'product_name',
+          'quantity',
+          'length',
+          'width',
+          'thickness',
+          'weight',
+          'updatedAt',
+          [fn('COALESCE', fn('SUM', col('sales.quantity_sold')), 0), 'total_sold'],
+          [fn('COALESCE', fn('SUM', literal('sales.quantity_sold * sales.unit_price')), 0), 'total_revenue']
+        ],
         include: [
           {
             model: Brand,
@@ -105,17 +111,31 @@ class DashboardController {
           {
             model: Sale,
             as: 'sales',
-            where: {
-              sale_date: {
-                [Op.between]: [startDate, endDate]
+            required: false,
+            attributes: [],
+            include: [
+              {
+                model: CustomerSaleMapping,
+                as: 'customerSale',
+                where: {
+                  sale_date: {
+                    [Op.between]: [startDate, endDate]
+                  }
+                },
+                required: true,
+                attributes: []
               }
-            },
-            required: false, // LEFT JOIN to include products with no sales
-            attributes: [] // avoid selecting sales.id to satisfy ONLY_FULL_GROUP_BY
+            ]
           }
         ],
-        group: ['Product.id'],
-        order: [['product_name', 'ASC']]
+        group: [
+          'Product.id',
+          'brand.id',
+          'shop.id',
+          'category.id'
+        ],
+        order: [['product_name', 'ASC']],
+        subQuery: false
       });
 
       // Process the data to get cleaner format
@@ -143,14 +163,32 @@ class DashboardController {
         };
       });
 
-      // Calculate summary statistics
+      // Calculate summary statistics based on sales data
       const summary = {
         total_products: dashboardData.length,
         total_quantity_sold: dashboardData.reduce((sum, item) => sum + item.quantity_sold, 0),
-        total_revenue: dashboardData.reduce((sum, item) => sum + item.total_revenue, 0),
-        products_with_sales: dashboardData.filter(item => item.quantity_sold > 0).length,
-        products_without_sales: dashboardData.filter(item => item.quantity_sold === 0).length
+        total_customer_paid: 0,
+        total_due_amount: 0
       };
+
+      // Get payment summary from CustomerSaleMapping
+      const paymentSummary = await CustomerSaleMapping.findOne({
+        where: {
+          sale_date: {
+            [Op.between]: [startDate, endDate]
+          }
+        },
+        attributes: [
+          [fn('COALESCE', fn('SUM', col('customer_paid')), 0), 'total_paid'],
+          [fn('COALESCE', fn('SUM', col('rest_amount')), 0), 'total_due']
+        ],
+        raw: true
+      });
+
+      if (paymentSummary) {
+        summary.total_customer_paid = parseFloat(paymentSummary.total_paid) || 0;
+        summary.total_due_amount = parseFloat(paymentSummary.total_due) || 0;
+      }
 
       res.status(200).json({
         success: true,
@@ -231,20 +269,13 @@ class DashboardController {
         }
       }
 
-      // Build where clause for sales
-      const salesWhere = {
-        sale_date: {
-          [Op.between]: [startDate, endDate]
-        }
-      };
-  if (shop_id && !isAllShops) salesWhere.shop_id = shop_id;
-
       const topProducts = await Sale.findAll({
-        where: salesWhere,
+        where: shop_id && !isAllShops ? { shop_id } : {},
         include: [
           {
             model: Product,
             as: 'product',
+            attributes: ['id', 'product_name', 'length', 'width', 'thickness', 'weight'],
             include: [
               {
                 model: Brand,
@@ -255,24 +286,58 @@ class DashboardController {
                 model: Category,
                 as: 'category',
                 attributes: ['id', 'category_name']
+              },
+              {
+                model: Shop,
+                as: 'shop',
+                attributes: ['id', 'shop_name']
               }
             ]
           },
           {
             model: Shop,
             as: 'shop',
-            attributes: ['id', 'shop_name']
+            attributes: []
+          },
+          {
+            model: CustomerSaleMapping,
+            as: 'customerSale',
+            where: {
+              sale_date: {
+                [Op.between]: [startDate, endDate]
+              }
+            },
+            required: true,
+            attributes: []
           }
         ],
         attributes: [
           'product_id',
-          [fn('SUM', col('quantity_sold')), 'total_sold'],
-          [fn('SUM', col('total_amount')), 'total_revenue'],
-          [fn('COUNT', col('Sale.id')), 'total_transactions']
+          [fn('SUM', col('Sale.quantity_sold')), 'total_sold'],
+          [fn('SUM', literal('Sale.quantity_sold * Sale.unit_price')), 'total_revenue'],
+          [fn('COUNT', col('Sale.id')), 'total_transactions'],
+          [fn('COALESCE', fn('SUM', col('customerSale.customer_paid')), 0), 'total_customer_paid'],
+          [fn('COALESCE', fn('SUM', col('customerSale.discount_amount')), 0), 'total_discount'],
+          [fn('COALESCE', fn('SUM', col('customerSale.rest_amount')), 0), 'total_due']
         ],
-        group: ['product_id'],
-        order: [[fn('SUM', col('quantity_sold')), 'DESC']],
-        limit: parseInt(limit)
+        group: [
+          'product_id',
+          'product.id',
+          'product.product_name',
+          'product.length',
+          'product.width',
+          'product.thickness',
+          'product.weight',
+          'product->brand.id',
+          'product->brand.brand_name',
+          'product->category.id',
+          'product->category.category_name',
+          'product->shop.id',
+          'product->shop.shop_name'
+        ],
+        order: [[fn('SUM', col('Sale.quantity_sold')), 'DESC']],
+        limit: parseInt(limit),
+        subQuery: false
       });
 
       res.status(200).json({
@@ -353,29 +418,42 @@ class DashboardController {
       }
 
   const shopSummary = await Sale.findAll({
-        where: {
-          sale_date: {
-            [Op.between]: [startDate, endDate]
-          },
-          ...(shop_id && !isAllShops ? { shop_id } : {})
-        },
+        where: shop_id && !isAllShops ? { shop_id } : {},
         include: [
           {
             model: Shop,
             as: 'shop',
-    // Shop has no 'location' column; use city/state if needed
-    attributes: ['id', 'shop_name', 'shop_type', 'city', 'state']
+            attributes: ['id', 'shop_name', 'shop_type', 'city', 'state']
+          },
+          {
+            model: CustomerSaleMapping,
+            as: 'customerSale',
+            where: {
+              sale_date: {
+                [Op.between]: [startDate, endDate]
+              }
+            },
+            required: true,
+            attributes: []
           }
         ],
         attributes: [
           'shop_id',
-          [fn('SUM', col('quantity_sold')), 'total_quantity_sold'],
-          [fn('SUM', col('total_amount')), 'total_revenue'],
+          [fn('SUM', col('Sale.quantity_sold')), 'total_quantity_sold'],
+          [fn('SUM', literal('Sale.quantity_sold * Sale.unit_price')), 'total_revenue'],
           [fn('COUNT', col('Sale.id')), 'total_transactions'],
-          [fn('COUNT', fn('DISTINCT', col('product_id'))), 'unique_products_sold']
+          [fn('COUNT', fn('DISTINCT', col('Sale.product_id'))), 'unique_products_sold']
         ],
-        group: ['shop_id'],
-        order: [[fn('SUM', col('total_amount')), 'DESC']]
+        group: [
+          'shop_id',
+          'shop.id',
+          'shop.shop_name',
+          'shop.shop_type',
+          'shop.city',
+          'shop.state'
+        ],
+        order: [[fn('SUM', literal('Sale.quantity_sold * Sale.unit_price')), 'DESC']],
+        subQuery: false
       });
 
       res.status(200).json({
