@@ -101,21 +101,25 @@ function DashboardInner() {
           </div>
 
           {/* Top stats cards */}
-          <div className="p-4 lg:p-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 max-[500px]:p-3 max-[500px]:gap-3">
+          <div className="p-4 lg:p-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 max-[500px]:p-3 max-[500px]:gap-3">
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10 max-[500px]:p-4">
-              <p className="text-xs text-white/60 max-[500px]:text-[10px]">Total Products</p>
+              <p className="text-xs text-white/60 max-[500px]:text-[10px]">Products Count</p>
               <p className="mt-3 text-2xl font-extrabold max-[500px]:text-xl">{analytics?.summary?.total_products ?? '-'}</p>
             </div>
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10 max-[500px]:p-4">
-              <p className="text-xs text-white/60 max-[500px]:text-[10px]">Total Quantity Sold</p>
+              <p className="text-xs text-white/60 max-[500px]:text-[10px]">Products Quantity</p>
+              <p className="mt-3 text-2xl font-extrabold max-[500px]:text-xl">{analytics?.summary?.total_products_quantity ?? '-'}</p>
+            </div>
+            <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10 max-[500px]:p-4">
+              <p className="text-xs text-white/60 max-[500px]:text-[10px]">Quantity Sold</p>
               <p className="mt-3 text-2xl font-extrabold max-[500px]:text-xl">{analytics?.summary?.total_quantity_sold ?? '-'}</p>
             </div>
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10 max-[500px]:p-4">
-              <p className="text-xs text-white/60 max-[500px]:text-[10px]">Total Customer Paid</p>
+              <p className="text-xs text-white/60 max-[500px]:text-[10px]">Customer Paid</p>
               <p className="mt-3 text-2xl font-extrabold max-[500px]:text-xl">₹{Number(analytics?.summary?.total_customer_paid || 0).toLocaleString('en-IN')}</p>
             </div>
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10 max-[500px]:p-4">
-              <p className="text-xs text-white/60 max-[500px]:text-[10px]">Total Due Amount</p>
+              <p className="text-xs text-white/60 max-[500px]:text-[10px]">Due Amount</p>
               <p className="mt-3 text-2xl font-extrabold max-[500px]:text-xl text-red-400">₹{Number(analytics?.summary?.total_due_amount || 0).toLocaleString('en-IN')}</p>
             </div>
           </div>

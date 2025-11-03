@@ -166,6 +166,7 @@ class DashboardController {
       // Calculate summary statistics based on sales data
       const summary = {
         total_products: dashboardData.length,
+        total_products_quantity: dashboardData.reduce((sum, item) => sum + (item.current_quantity || 0), 0),
         total_quantity_sold: dashboardData.reduce((sum, item) => sum + item.quantity_sold, 0),
         total_customer_paid: 0,
         total_due_amount: 0
