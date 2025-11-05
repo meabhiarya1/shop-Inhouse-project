@@ -203,7 +203,7 @@ class DashboardController {
             end_date: end_date || null
           },
           summary: summary,
-          products: dashboardData
+          // products: dashboardData
         }
       });
 

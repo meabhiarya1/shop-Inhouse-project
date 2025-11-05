@@ -95,6 +95,18 @@ function DashboardInner() {
     ]
   }, [analytics])
 
+  // Check if pie chart has data
+  const hasPieChartData = useMemo(() => {
+    const totalPaid = Number(analytics?.summary?.total_customer_paid || 0)
+    const totalDue = Number(analytics?.summary?.total_due_amount || 0)
+    return totalPaid > 0 || totalDue > 0
+  }, [analytics])
+
+  // Check if bar chart has data
+  const hasBarChartData = useMemo(() => {
+    return topProductsChart && topProductsChart.length > 0
+  }, [topProductsChart])
+
   return (
     <div className="w-full min-h-screen bg-[#0a0f1e] flex items-stretch justify-center relative overflow-hidden">
       <div className="w-full max-w-7xl mx-4 my-6 bg-[#0f1535] rounded-3xl shadow-2xl overflow-hidden flex max-[500px]:mx-2 max-[500px]:my-3">
@@ -152,36 +164,44 @@ function DashboardInner() {
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10">
               <p className="font-semibold mb-4">Customer Paid vs Due Amount</p>
               <div className="h-64 sm:h-72 md:h-80 flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={revenueVsDuePct}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {revenueVsDuePct.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ 
-                        background: '#0f1535', 
-                        border: '1px solid #ffffff22', 
-                        color: '#fff',
-                        borderRadius: '8px',
-                        padding: '8px 12px'
-                      }}
-                      itemStyle={{ color: '#fff' }}
-                      labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                      formatter={(value) => `₹${Number(value).toLocaleString('en-IN')}`}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                {hasPieChartData ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={revenueVsDuePct}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {revenueVsDuePct.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ 
+                          background: '#0f1535', 
+                          border: '1px solid #ffffff22', 
+                          color: '#fff',
+                          borderRadius: '8px',
+                          padding: '8px 12px'
+                        }}
+                        itemStyle={{ color: '#fff' }}
+                        labelStyle={{ color: '#fff', fontWeight: 'bold' }}
+                        formatter={(value) => `₹${Number(value).toLocaleString('en-IN')}`}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-white/60 text-lg">No data found</p>
+                    <p className="text-white/40 text-sm mt-2">No sales data available for the selected period</p>
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-center gap-6 mt-4">
                 <div className="flex items-center gap-2">
@@ -200,32 +220,41 @@ function DashboardInner() {
             <div className="rounded-2xl p-5 bg-gradient-to-br from-[#121a3d] to-[#182057] text-white border border-white/10">
               <div className="flex items-center justify-between mb-4">
                 <p className="font-semibold">Top Sold Products</p>
-                <span className="text-xs text-white/60">Period: {period}</span>
+                <span className="text-xs text-white/60 capitalize">Period: {period}</span>
               </div>
               <div className="h-80 sm:h-96 md:h-[28rem] pb-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topProductsChart} margin={{ bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                    <XAxis 
-                      dataKey="name" 
-                      stroke="#ffffff50" 
-                      interval={0} 
-                      angle={-45} 
-                      textAnchor="end" 
-                      height={120}
-                      tick={{ fontSize: 11 }}
-                    />
-                    <YAxis stroke="#ffffff50" />
-                    <Tooltip 
-                      contentStyle={{ background: '#0f1535', border: '1px solid #ffffff22', color: '#fff' }}
-                      cursor={false}
-                    />
-                    <Bar dataKey="quantity" fill="#6366f1" radius={[6, 6, 0, 0]} name="Quantity" />
-                    <Bar dataKey="paid" fill="#34d399" radius={[6, 6, 0, 0]} name="Paid (₹)" />
-                    <Bar dataKey="discount" fill="#fbbf24" radius={[6, 6, 0, 0]} name="Discount (₹)" />
-                    <Bar dataKey="due" fill="#f87171" radius={[6, 6, 0, 0]} name="Due (₹)" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {hasBarChartData ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topProductsChart} margin={{ bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#ffffff50" 
+                        interval={0} 
+                        angle={-30} 
+                        textAnchor="end" 
+                        height={120}
+                        tick={{ fontSize: 8 }}
+                      />
+                      <YAxis stroke="#ffffff50" />
+                      <Tooltip 
+                        contentStyle={{ background: '#0f1535', border: '1px solid #ffffff22', color: '#fff' }}
+                        cursor={false}
+                      />
+                      <Bar dataKey="quantity" fill="#6366f1" radius={[6, 6, 0, 0]} name="Quantity" />
+                      <Bar dataKey="paid" fill="#34d399" radius={[6, 6, 0, 0]} name="Paid (₹)" />
+                      <Bar dataKey="discount" fill="#fbbf24" radius={[6, 6, 0, 0]} name="Discount (₹)" />
+                      <Bar dataKey="due" fill="#f87171" radius={[6, 6, 0, 0]} name="Due (₹)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <p className="text-white/60 text-lg">No data found</p>
+                      <p className="text-white/40 text-sm mt-2">No products sold in the selected period</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
