@@ -16,6 +16,8 @@ export function DashboardProvider({ children }) {
   const [shops, setShops] = useState([]);
   const [selectedShop, setSelectedShop] = useState("all");
   const [period, setPeriod] = useState("lifetime");
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
 
   // Load shops on mount / when user changes
@@ -61,10 +63,14 @@ export function DashboardProvider({ children }) {
       setSelectedShop,
       period,
       setPeriod,
+      startDate,
+      setStartDate,
+      endDate,
+      setEndDate,
       avatarOpen,
       setAvatarOpen,
     }),
-    [user, logout, shops, selectedShop, period, avatarOpen]
+    [user, logout, shops, selectedShop, period, startDate, endDate, avatarOpen]
   );
 
   return (

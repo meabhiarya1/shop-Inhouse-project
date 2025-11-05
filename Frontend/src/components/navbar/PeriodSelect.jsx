@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useDashboard } from '../../context/DashboardContext.jsx'
 import { Calendar } from 'lucide-react'
 
 export default function PeriodSelect() {
   const { period, setPeriod, startDate, setStartDate, endDate, setEndDate } = useDashboard()
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const [triggerFetch, setTriggerFetch] = useState(0)
 
   const handlePeriodChange = (e) => {
     const value = e.target.value
@@ -17,6 +18,14 @@ export default function PeriodSelect() {
       setShowDatePicker(true)
     }
   }
+
+  // Trigger fetch when both dates are selected in custom mode
+  useEffect(() => {
+    if (period === 'custom' && startDate && endDate) {
+      // Trigger a refetch by incrementing counter
+      setTriggerFetch(prev => prev + 1)
+    }
+  }, [startDate, endDate, period])
 
   return (
     <div className="flex items-center gap-3">

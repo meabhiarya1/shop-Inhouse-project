@@ -14,7 +14,7 @@ import { useLocation } from 'react-router-dom'
 
 function DashboardInner() {
   const { user } = useAuth()
-  const { selectedShop, period } = useDashboard()
+  const { selectedShop, period, startDate, endDate } = useDashboard()
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [analytics, setAnalytics] = useState(null)
   const [topProducts, setTopProducts] = useState([])
@@ -29,14 +29,37 @@ function DashboardInner() {
   useEffect(() => {
     const loadDashboard = async () => {
       if (!selectedShop) return
+      
+      // If custom period, wait for both dates to be selected
+      if (period === 'custom' && (!startDate || !endDate)) {
+        return
+      }
+      
       setLoading(true)
       setError('')
       try {
         const headers = { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` }
+        
+        // Build params with start_date and end_date for custom period
+        const params = { 
+          period, 
+          shop_id: selectedShop 
+        }
+        
+        if (period === 'custom' && startDate && endDate) {
+          params.start_date = startDate
+          params.end_date = endDate
+        }
+        
         const [aRes, tRes, sRes] = await Promise.all([
-          axios.get('/api/dashboard/analytics', { params: { period, shop_id: selectedShop }, headers }),
-          axios.get('/api/dashboard/top-products', { params: { period, shop_id: selectedShop, limit: 10 }, headers }),
-          axios.get('/api/dashboard/shop-summary', { params: { period }, headers }),
+          axios.get('/api/dashboard/analytics', { params, headers }),
+          axios.get('/api/dashboard/top-products', { params: { ...params, limit: 10 }, headers }),
+          axios.get('/api/dashboard/shop-summary', { 
+            params: period === 'custom' && startDate && endDate 
+              ? { period, start_date: startDate, end_date: endDate } 
+              : { period }, 
+            headers 
+          }),
         ])
         setAnalytics(aRes.data?.data || null)
         setTopProducts(tRes.data?.data?.top_products || [])
@@ -50,7 +73,7 @@ function DashboardInner() {
       }
     }
     loadDashboard()
-  }, [selectedShop, period])
+  }, [selectedShop, period, startDate, endDate])
 
   // Derived chart data from API
   const topProductsChart = useMemo(() => {

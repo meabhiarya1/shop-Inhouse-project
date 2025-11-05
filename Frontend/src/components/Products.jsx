@@ -215,7 +215,7 @@ function CategoryDropdown({
 }
 
 function ProductsInner() {
-  const { selectedShop, period, shops } = useDashboard();
+  const { selectedShop, period, startDate, endDate, shops } = useDashboard();
   const { addToCart, reloadCartFromBackend } = useCart();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);
@@ -384,6 +384,11 @@ function ProductsInner() {
 
   const loadProducts = useCallback(
     async (page = 1) => {
+      // If custom period, wait for both dates to be selected
+      if (period === 'custom' && (!startDate || !endDate)) {
+        return;
+      }
+      
       setLoading(true);
       try {
         const params = {
@@ -391,6 +396,13 @@ function ProductsInner() {
           page,
           limit: 12,
         };
+        
+        // Add start_date and end_date for custom period
+        if (period === 'custom' && startDate && endDate) {
+          params.start_date = startDate;
+          params.end_date = endDate;
+        }
+        
         // Prefer shop-specific endpoint for clarity; supports 'all'
         const url = `/api/products/shop/${selectedShop || "all"}`;
         const { data } = await axios.get(url, { params, headers });
@@ -435,7 +447,7 @@ function ProductsInner() {
         setLoading(false);
       }
     },
-    [selectedShop, period, headers]
+    [selectedShop, period, startDate, endDate, headers]
   );
 
   // Search products using API
@@ -512,7 +524,7 @@ function ProductsInner() {
     }
     loadBrands(); // Load brands on component mount
     loadCategories(); // Load categories on component mount
-  }, [selectedShop, period, loadProducts, loadBrands, loadCategories]);
+  }, [selectedShop, period, startDate, endDate, loadProducts, loadBrands, loadCategories]);
 
   const openCreate = () => {
     setForm({

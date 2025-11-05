@@ -22,8 +22,6 @@ import { toast } from "react-toastify";
 import Sidebar from "./Sidebar.jsx";
 import Pagination from "./Pagination.jsx";
 import { DashboardProvider } from "../context/DashboardContext.jsx";
-import PeriodSelect from "./navbar/PeriodSelect.jsx";
-import ShopDropdown from "./navbar/ShopDropdown.jsx";
 import AvatarDropdown from "./navbar/AvatarDropdown.jsx";
 import CartIcon from "./navbar/CartIcon.jsx";
 
@@ -360,9 +358,7 @@ function CategoriesInner() {
             </div>
 
             <div className="flex items-center space-x-4 max-[500px]:space-x-2">
-              {/* Navbar kept consistent */}
-              <PeriodSelect />
-              <ShopDropdown />
+              {/* Categories are global, so period and shop filters are hidden */}
               <CartIcon />
               <AvatarDropdown />
             </div>

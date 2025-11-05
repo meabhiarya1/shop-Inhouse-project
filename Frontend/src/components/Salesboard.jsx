@@ -33,7 +33,7 @@ import Pagination from "./Pagination.jsx";
 import { useLocation } from "react-router-dom";
 
 function SalesboardInner() {
-  const { selectedShop, period, shops } = useDashboard();
+  const { selectedShop, period, startDate, endDate, shops } = useDashboard();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sales, setSales] = useState([]);
   const [totalSales, setTotalSales] = useState(0);
@@ -200,10 +200,22 @@ function SalesboardInner() {
   };
 
   const loadSales = async (page = 1) => {
+    // If custom period, wait for both dates to be selected
+    if (period === 'custom' && (!startDate || !endDate)) {
+      return;
+    }
+    
     setLoading(true);
     try {
       const params = { page, limit: 12, period };
       if (selectedShop) params.shop_id = selectedShop;
+      
+      // Add start_date and end_date for custom period
+      if (period === 'custom' && startDate && endDate) {
+        params.start_date = startDate;
+        params.end_date = endDate;
+      }
+      
       const { data } = await axios.get("/api/sales", { params, headers });
       setSales(data?.data?.sales || []);
       setTotalSales(data?.data?.pagination?.total || 0);
@@ -629,7 +641,7 @@ function SalesboardInner() {
   useEffect(() => {
     loadSales(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedShop, period]);
+  }, [selectedShop, period, startDate, endDate]);
 
   // Listen for sale completion events to refresh data
   useEffect(() => {
