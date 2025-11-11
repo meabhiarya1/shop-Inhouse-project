@@ -1,6 +1,6 @@
 const { Sequelize } = require('sequelize');
 const dotenv = require('dotenv');
-const { Category } = require('../models/Category'); // adjust this path if models folder is elsewhere
+const Category = require('../models/Category'); // Remove destructuring - it's a default export
 
 dotenv.config();
 
@@ -22,19 +22,19 @@ dotenv.config();
     console.log("✅ Database connected.");
 
     const categories = [
-      { name: 'Furniture', description: 'Home and office furniture' },
-      { name: 'Hardware', description: 'Tools and hardware accessories' },
-      { name: 'Electrical', description: 'Wires, switches, and electricals' },
-      { name: 'Paints', description: 'Wall and wood paints' },
+      { category_name: 'Furniture' },
+      { category_name: 'Hardware' },
+      { category_name: 'Electrical' },
+      { category_name: 'Paints' },
     ];
 
     for (const cat of categories) {
-      const existing = await Category.findOne({ where: { name: cat.name } });
+      const existing = await Category.findOne({ where: { category_name: cat.category_name } });
       if (!existing) {
         await Category.create(cat);
-        console.log(`✅ Created category: ${cat.name}`);
+        console.log(`✅ Created category: ${cat.category_name}`);
       } else {
-        console.log(`⚠️ Category already exists: ${cat.name}`);
+        console.log(`⚠️ Category already exists: ${cat.category_name}`);
       }
     }
 

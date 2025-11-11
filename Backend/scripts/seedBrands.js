@@ -1,6 +1,6 @@
 const { Sequelize } = require('sequelize');
 const dotenv = require('dotenv');
-const { Brand } = require('../models/Brand');
+const Brand = require('../models/Brand'); // Remove destructuring - it's a default export
 
 dotenv.config();
 
@@ -20,19 +20,19 @@ dotenv.config();
     console.log("✅ Database connected.");
 
     const brands = [
-      { name: 'Asian Paints' },
-      { name: 'Havells' },
-      { name: 'Fevicol' },
-      { name: 'Godrej' },
+      { brand_name: 'Asian Paints' },
+      { brand_name: 'Havells' },
+      { brand_name: 'Fevicol' },
+      { brand_name: 'Godrej' },
     ];
 
     for (const b of brands) {
-      const existing = await Brand.findOne({ where: { name: b.name } });
+      const existing = await Brand.findOne({ where: { brand_name: b.brand_name } });
       if (!existing) {
         await Brand.create(b);
-        console.log(`✅ Created brand: ${b.name}`);
+        console.log(`✅ Created brand: ${b.brand_name}`);
       } else {
-        console.log(`⚠️ Brand already exists: ${b.name}`);
+        console.log(`⚠️ Brand already exists: ${b.brand_name}`);
       }
     }
 
