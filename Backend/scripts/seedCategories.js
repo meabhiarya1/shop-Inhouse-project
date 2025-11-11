@@ -1,6 +1,6 @@
 const { Sequelize } = require('sequelize');
 const dotenv = require('dotenv');
-const { Category } = require('../models'); // adjust this path if models folder is elsewhere
+const { Category } = require('../models/Category'); // adjust this path if models folder is elsewhere
 
 dotenv.config();
 

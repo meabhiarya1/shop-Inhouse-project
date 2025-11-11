@@ -1,6 +1,6 @@
 const { Sequelize } = require('sequelize');
 const dotenv = require('dotenv');
-const { Brand } = require('../models');
+const { Brand } = require('../models/Brand');
 
 dotenv.config();
 
